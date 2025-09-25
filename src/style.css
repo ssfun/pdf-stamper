@@ -28,30 +28,20 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   transition: grid-template-columns 0.3s ease-in-out;
 }
 #app.sidebar-collapsed {
-  grid-template-columns: 0 1fr 320px;
-}
-
-.sidebar, .main-content-wrapper, .toolbar {
-  background-color: var(--surface-color);
-  border-radius: var(--border-radius);
-  box-shadow: var(--box-shadow);
-  height: calc(100vh - 2rem);
-  display: flex;
-  flex-direction: column;
+  grid-template-columns: 0px 1fr 320px;
 }
 
 /* 左侧边栏 */
 .sidebar {
   padding: 1rem;
-  overflow: hidden;
-  transition: padding 0.3s ease-in-out, transform 0.3s ease-in-out;
-  position: relative; /* 为按钮定位提供锚点 */
+  transition: transform 0.3s ease-in-out;
+  position: relative;
+  /* **FIX 1: 移除 overflow: hidden，允许按钮伸出** */
 }
 #app.sidebar-collapsed .sidebar {
-  padding-left: 0;
-  padding-right: 0;
   transform: translateX(calc(-1 * var(--sidebar-width)));
 }
+
 .sidebar-header {
   display: flex;
   justify-content: space-between;
@@ -77,23 +67,18 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 .thumbnail-item.active { border-color: var(--primary-color); }
 .thumbnail-item p { text-align: center; margin-top: 0.5rem; font-size: 0.875rem; }
 
-/* **FIX 2: 侧边栏开关按钮新样式** */
+/* **FIX 1: 开关按钮新样式** */
 .sidebar-toggle-btn {
   background: none; border: none; padding: 4px; cursor: pointer;
   color: var(--text-color-light); border-radius: var(--border-radius);
-  transition: all 0.2s;
-  position: absolute; /* 绝对定位 */
-  top: 1rem;
+  transition: color 0.2s, background-color 0.2s, transform 0.3s ease-in-out;
+  position: absolute;
+  top: calc(1rem - 4px); /* 对齐标题栏 */
   right: 1rem;
 }
 .sidebar-toggle-btn:hover { background-color: var(--bg-color); color: var(--text-color); }
 #app.sidebar-collapsed .sidebar-toggle-btn {
-  transform: translateX(calc(var(--sidebar-width) + 0.5rem)); /* 移出隐藏区域 */
-  background-color: var(--surface-color);
-  box-shadow: var(--box-shadow);
-  border: 1px solid var(--border-color);
-  border-radius: 50%;
-  width: 32px; height: 32px;
+  transform: translateX(calc(var(--sidebar-width) + 1.5rem)); /* 移到外部 */
 }
 .sidebar-toggle-btn svg { transition: transform 0.3s ease-in-out; }
 #app.sidebar-collapsed .sidebar-toggle-btn svg { transform: rotate(180deg); }
@@ -101,11 +86,8 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 /* 中间主工作区 */
 .main-content-wrapper { padding: 0; position: relative; overflow: hidden; }
 .main-content {
-  overflow: auto; flex-grow: 1; display: flex;
-  padding: 2rem; background-color: var(--bg-color);
-  position: relative; height: 100%;
-  /* **FIX 1: 关键修复，确保padding被包含在宽度计算内** */
-  box-sizing: border-box;
+  overflow: auto; flex-grow: 1; display: flex; padding: 2rem;
+  background-color: var(--bg-color); position: relative; height: 100%;
 }
 
 /* 拖拽区域 */
@@ -119,8 +101,8 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 #app.no-pdf-loaded .drop-zone { display: flex; }
 .main-content.dragover .drop-zone {
   display: flex; position: absolute; top: 0; left: 0;
-  background-color: rgba(0, 123, 255, 0.1); border-color: var(--primary-color);
-  z-index: 10;
+  background-color: rgba(0, 123, 255, 0.1);
+  border-color: var(--primary-color); z-index: 10;
 }
 .drop-zone-prompt { text-align: center; color: var(--text-color-light); }
 .drop-zone-prompt h2 { color: var(--text-color); margin: 1rem 0; }
@@ -138,7 +120,8 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 #page-indicator { font-weight: bold; min-width: 80px; }
 .page-selector {
   padding: 4px 8px; border-radius: 4px;
-  border: 1px solid var(--border-color); background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  background-color: var(--surface-color);
 }
 #zoom-slider { flex-grow: 1; max-width: 200px; }
 #zoom-value { font-weight: bold; min-width: 120px; text-align: right; }
@@ -157,32 +140,42 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 }
 .file-inputs, .button-group { display: flex; flex-direction: column; gap: 0.75rem; }
 .button-group { margin-bottom: 1rem; }
+.file-name { font-size: 0.875rem; color: var(--text-color-light); margin-top: 0.5rem; }
+
+/* **FIX 2: 印章预览样式** */
+.seal-preview-container {
+  width: 100%;
+  height: 120px; /* 固定高度 */
+  border: 1px dashed var(--border-color);
+  border-radius: var(--border-radius);
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-color);
+  /* 透明格子背景 */
+  background-image: linear-gradient(45deg, #eee 25%, transparent 25%), linear-gradient(-45deg, #eee 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #eee 75%), linear-gradient(-45deg, transparent 75%, #eee 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+.seal-preview-image {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain; /* 保持比例 */
+}
+.seal-preview-placeholder {
+  color: var(--text-color-light);
+}
+.hidden {
+  display: none;
+}
+
 .toolbar-footer {
     margin-top: auto; text-align: center; font-size: 0.875rem;
     color: var(--text-color-light); padding-top: 1rem;
     border-top: 1px solid var(--border-color);
 }
 .toolbar-footer a { color: var(--primary-color); text-decoration: none; }
-
-/* **FIX 3: 印章预览样式** */
-.seal-preview {
-  margin-top: 0.75rem;
-  width: 100%;
-  height: 120px;
-  border: 1px dashed var(--border-color);
-  border-radius: var(--border-radius);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--bg-color);
-}
-.seal-preview span { color: var(--text-color-light); }
-.seal-preview img {
-  max-width: 100%;
-  max-height: 100%;
-  padding: 8px; /* 内边距，防止图片贴边 */
-  object-fit: contain;
-}
 
 /* 通用组件 */
 .btn {
@@ -201,4 +194,3 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 .btn-action { background-color: var(--surface-color); color: var(--primary-color); border: 1px solid var(--primary-color); }
 .btn-action:hover { background-color: var(--primary-color); color: var(--surface-color); }
 .btn-export { font-size: 1.125rem; padding: 1rem; }
-[hidden] { display: none !important; }
