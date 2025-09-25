@@ -57,7 +57,7 @@ function initializeEventListeners() {
     sidebarToggleBtn.addEventListener('click', () => {
         appContainer.classList.toggle('sidebar-collapsed');
         setTimeout(() => {
-            if(pdfDoc) showPage(currentActivePage, true); // 强制重新计算布局
+            if(pdfDoc) showPage(currentActivePage, true);
         }, 300);
     });
     
@@ -87,7 +87,7 @@ function initializeEventListeners() {
 
     zoomSlider.addEventListener('input', (e) => {
         globalZoomMultiplier = parseFloat(e.target.value);
-        applyZoom(); // **FIX 2: 调用独立的缩放函数**
+        applyZoom();
     });
 
     window.addEventListener('keydown', (e) => {
@@ -99,8 +99,6 @@ function initializeEventListeners() {
 }
 
 // ---- UI 与导航函数 ----
-
-// **FIX 2: 独立的实时缩放函数**
 function applyZoom() {
     if (!pdfDoc) return;
     zoomValue.textContent = `${Math.round(globalZoomMultiplier * 100)}% (Fit-Width)`;
@@ -192,7 +190,6 @@ async function initializeFabricCanvasForPage(pageNum, forceRecalculate = false) 
     const originalWidth = highResViewport.width;
     const originalHeight = highResViewport.height;
 
-    // **FIX 1: 重新定义 "Fit" 为 "Fit-to-Width"**
     const containerWidth = mainContent.clientWidth - 40;
     const fitScale = containerWidth / originalWidth;
     pageFitScales[pageNum - 1] = fitScale;
@@ -200,7 +197,7 @@ async function initializeFabricCanvasForPage(pageNum, forceRecalculate = false) 
     const canvasEl = document.getElementById(`canvas-${pageNum}`);
     const fabricCanvas = fabricCanvases[pageNum - 1] || new fabric.Canvas(canvasEl);
     
-    if (!fabricCanvases[pageNum - 1]) { // 仅首次初始化时执行
+    if (!fabricCanvases[pageNum - 1]) {
         fabricCanvas.originalWidth = originalWidth;
         fabricCanvas.originalHeight = originalHeight;
         
@@ -229,7 +226,7 @@ async function showPage(pageNum, forceRecalculate = false) {
     wrapper.style.display = 'block';
 
     await initializeFabricCanvasForPage(pageNum, forceRecalculate);
-    applyZoom(); // 使用统一的缩放函数
+    applyZoom();
     updatePageNavigator();
 }
 
@@ -289,7 +286,9 @@ async function addStraddleSeal() {
             imgPiece.set({
                 left: canvas.originalWidth - (pieceWidth * initialScale),
                 top: 400, hasControls: true, borderColor: '#007bff',
-                lockMovementX: true, straddleGroup: groupId, pageIndex: i
+                lockMovementX: true, straddleGroup: groupId, pageIndex: i,
+                // **确保骑缝章也是中心定位**
+                originX: 'left', originY: 'top', 
             });
             canvas.add(imgPiece);
             canvas.renderAll();
@@ -354,8 +353,20 @@ async function exportPDF() {
                 const objWidth = obj.getScaledWidth();
                 const objHeight = obj.getScaledHeight();
                 
-                const pdfX = (obj.left / canvas.originalWidth) * pageWidth;
-                const pdfY = pageHeight - ((obj.top + objHeight) / canvas.originalHeight) * pageHeight;
+                // ** 核心修复：根据对象的 origin 来计算其左上角坐标 **
+                let objLeft = obj.left;
+                let objTop = obj.top;
+
+                if (obj.originX === 'center') {
+                    objLeft -= objWidth / 2;
+                }
+                if (obj.originY === 'center') {
+                    objTop -= objHeight / 2;
+                }
+                // (对于 originX/Y 为 'left'/'top' 的对象，此计算无影响，保持正确)
+                
+                const pdfX = (objLeft / canvas.originalWidth) * pageWidth;
+                const pdfY = pageHeight - ((objTop + objHeight) / canvas.originalHeight) * pageHeight;
 
                 page.drawImage(pngImage, {
                     x: pdfX, y: pdfY,
