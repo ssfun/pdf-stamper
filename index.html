@@ -27,17 +27,24 @@
         </div>
       </aside>
 
-      <main class="main-content" id="main-content">
-        <div id="canvas-container">
-            </div>
-        <div id="drop-zone" class="drop-zone">
-            <div class="drop-zone-prompt">
-                <img src="/drag-drop-icon.svg" alt="拖拽上传" width="80">
-                <h2>将 PDF 文件拖拽到此处</h2>
-                <p>或</p>
-                <button class="btn btn-primary" id="upload-pdf-btn-main">选择文件</button>
-                <input type="file" id="pdfInput" accept=".pdf" hidden />
-            </div>
+      <main class="main-content-wrapper">
+        <div class="main-content" id="main-content">
+          <div id="canvas-container">
+              </div>
+          <div id="drop-zone" class="drop-zone">
+              <div class="drop-zone-prompt">
+                  <img src="/drag-drop-icon.svg" alt="拖拽上传" width="80">
+                  <h2>将 PDF 文件拖拽到此处</h2>
+                  <p>或</p>
+                  <button class="btn btn-primary" id="upload-pdf-btn-main">选择文件</button>
+                  <input type="file" id="pdfInput" accept=".pdf" hidden />
+              </div>
+          </div>
+        </div>
+        <div class="main-content-footer">
+          <label for="zoom-slider">缩放:</label>
+          <input type="range" id="zoom-slider" min="0.5" max="3" value="1" step="0.1">
+          <span id="zoom-value">100%</span>
         </div>
       </main>
 
@@ -62,18 +69,19 @@
             <button id="addSeal" class="btn btn-action">添加普通章</button>
             <button id="addStraddle" class="btn btn-action">添加骑缝章</button>
           </div>
-           <div class="button-group">
+          <div class="button-group">
             <button id="deleteSeal" class="btn btn-danger">删除选中印章</button>
           </div>
         </div>
         
         <div class="tool-section">
             <h3>第三步：导出文件</h3>
-            <button id="exportPDF" class="btn btn-primary btn-export">导出为 PDF</button>
+            <button id="exportPDF" class="btn btn-primary btn-export">导出盖章 PDF</button>
         </div>
 
         <div class="toolbar-footer">
           <p>所有操作均在本地完成，无数据上传。</p>
+          <a href="./WechatIMG1834.jpeg" target="_blank">@SFUN</a>
         </div>
       </aside>
     </div>
