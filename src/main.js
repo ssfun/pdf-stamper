@@ -57,7 +57,7 @@ function initializeEventListeners() {
     sidebarToggleBtn.addEventListener('click', () => {
         appContainer.classList.toggle('sidebar-collapsed');
         setTimeout(() => {
-            if(pdfDoc) showPage(currentActivePage);
+            if(pdfDoc) showPage(currentActivePage, true); // 强制重新计算布局
         }, 300);
     });
     
@@ -85,16 +85,9 @@ function initializeEventListeners() {
         if (newPage !== currentActivePage) showPage(newPage);
     });
 
-    // **FIX 2: 修正缩放逻辑**
     zoomSlider.addEventListener('input', (e) => {
         globalZoomMultiplier = parseFloat(e.target.value);
-        zoomValue.textContent = `${Math.round(globalZoomMultiplier * 100)}% (Fit)`;
-        const canvas = fabricCanvases[currentActivePage - 1];
-        if (canvas) {
-            const fitScale = pageFitScales[currentActivePage - 1];
-            canvas.setZoom(fitScale * globalZoomMultiplier);
-            canvas.renderAll();
-        }
+        applyZoom(); // **FIX 2: 调用独立的缩放函数**
     });
 
     window.addEventListener('keydown', (e) => {
@@ -105,7 +98,25 @@ function initializeEventListeners() {
     });
 }
 
-// ---- 导航与UI更新函数 ----
+// ---- UI 与导航函数 ----
+
+// **FIX 2: 独立的实时缩放函数**
+function applyZoom() {
+    if (!pdfDoc) return;
+    zoomValue.textContent = `${Math.round(globalZoomMultiplier * 100)}% (Fit-Width)`;
+    const canvas = fabricCanvases[currentActivePage - 1];
+    if (canvas) {
+        const fitScale = pageFitScales[currentActivePage - 1];
+        const newZoom = fitScale * globalZoomMultiplier;
+        canvas.setZoom(newZoom);
+        canvas.setDimensions({ 
+            width: canvas.originalWidth * newZoom,
+            height: canvas.originalHeight * newZoom
+        });
+        canvas.renderAll();
+    }
+}
+
 function updatePageNavigator() {
     pageIndicator.textContent = `第 ${currentActivePage} / ${totalPages} 页`;
     pageSelector.innerHTML = '';
@@ -161,7 +172,6 @@ async function renderAllPages() {
         await page.render({ canvasContext: thumbCanvas.getContext('2d'), viewport }).promise;
         thumbItem.addEventListener('click', () => showPage(i));
         
-        // 创建画布的DOM结构
         const mainCanvasWrapper = document.createElement('div');
         mainCanvasWrapper.id = `page-wrapper-${i}`;
         mainCanvasWrapper.className = 'canvas-wrapper';
@@ -174,47 +184,38 @@ async function renderAllPages() {
     await showPage(1);
 }
 
-// **FIX 3: 恢复稳定可靠的渲染逻辑**
-async function initializeFabricCanvasForPage(pageNum) {
-    if (fabricCanvases[pageNum - 1]) return fabricCanvases[pageNum - 1];
+async function initializeFabricCanvasForPage(pageNum, forceRecalculate = false) {
+    if (fabricCanvases[pageNum - 1] && !forceRecalculate) return fabricCanvases[pageNum - 1];
 
     const page = await pdfDoc.getPage(pageNum);
-    
-    // 使用高分辨率获取原始尺寸
     const highResViewport = page.getViewport({ scale: 2.0 });
-    
-    // 计算自适应缩放
+    const originalWidth = highResViewport.width;
+    const originalHeight = highResViewport.height;
+
+    // **FIX 1: 重新定义 "Fit" 为 "Fit-to-Width"**
     const containerWidth = mainContent.clientWidth - 40;
-    const containerHeight = mainContent.clientHeight - 40;
-    const scaleX = containerWidth / highResViewport.width;
-    const scaleY = containerHeight / highResViewport.height;
-    const fitScale = Math.min(scaleX, scaleY);
+    const fitScale = containerWidth / originalWidth;
     pageFitScales[pageNum - 1] = fitScale;
 
-    // 创建一个临时画布用于渲染PDF
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = highResViewport.width;
-    tempCanvas.height = highResViewport.height;
-    await page.render({ canvasContext: tempCanvas.getContext('2d'), viewport: highResViewport }).promise;
-
-    // 初始化Fabric画布并设置背景
     const canvasEl = document.getElementById(`canvas-${pageNum}`);
-    const fabricCanvas = new fabric.Canvas(canvasEl);
-    fabricCanvas.setBackgroundImage(new fabric.Image(tempCanvas), fabricCanvas.renderAll.bind(fabricCanvas));
+    const fabricCanvas = fabricCanvases[pageNum - 1] || new fabric.Canvas(canvasEl);
     
-    // 存储原始尺寸并设置初始尺寸
-    fabricCanvas.originalWidth = highResViewport.width;
-    fabricCanvas.originalHeight = highResViewport.height;
-    fabricCanvas.setDimensions({
-        width: highResViewport.width * fitScale,
-        height: highResViewport.height * fitScale
-    });
-
-    fabricCanvases[pageNum - 1] = fabricCanvas;
+    if (!fabricCanvases[pageNum - 1]) { // 仅首次初始化时执行
+        fabricCanvas.originalWidth = originalWidth;
+        fabricCanvas.originalHeight = originalHeight;
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = originalWidth;
+        tempCanvas.height = originalHeight;
+        await page.render({ canvasContext: tempCanvas.getContext('2d'), viewport: highResViewport }).promise;
+        
+        fabricCanvas.setBackgroundImage(new fabric.Image(tempCanvas), fabricCanvas.renderAll.bind(fabricCanvas));
+        fabricCanvases[pageNum - 1] = fabricCanvas;
+    }
     return fabricCanvas;
 }
 
-async function showPage(pageNum) {
+async function showPage(pageNum, forceRecalculate = false) {
     if (!pdfDoc) return;
     currentActivePage = pageNum;
     
@@ -227,19 +228,8 @@ async function showPage(pageNum) {
     const wrapper = document.getElementById(`page-wrapper-${pageNum}`);
     wrapper.style.display = 'block';
 
-    const canvas = await initializeFabricCanvasForPage(pageNum);
-    if (canvas) {
-        const fitScale = pageFitScales[pageNum - 1];
-        canvas.setDimensions({
-            width: canvas.originalWidth * fitScale * globalZoomMultiplier,
-            height: canvas.originalHeight * fitScale * globalZoomMultiplier
-        });
-        canvas.setZoom(fitScale * globalZoomMultiplier);
-        canvas.renderAll();
-    }
-    
-    zoomSlider.value = globalZoomMultiplier;
-    zoomValue.textContent = `${Math.round(globalZoomMultiplier * 100)}% (Fit)`;
+    await initializeFabricCanvasForPage(pageNum, forceRecalculate);
+    applyZoom(); // 使用统一的缩放函数
     updatePageNavigator();
 }
 
@@ -361,14 +351,11 @@ async function exportPDF() {
                 const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
                 const pngImage = await pdfDoc.embedPng(pngImageBytes);
                 
-                // 使用原始画布尺寸进行坐标计算
                 const objWidth = obj.getScaledWidth();
                 const objHeight = obj.getScaledHeight();
-                const objLeft = obj.left;
-                const objTop = obj.top;
-
-                const pdfX = (objLeft / canvas.originalWidth) * pageWidth;
-                const pdfY = pageHeight - ((objTop + objHeight) / canvas.originalHeight) * pageHeight;
+                
+                const pdfX = (obj.left / canvas.originalWidth) * pageWidth;
+                const pdfY = pageHeight - ((obj.top + objHeight) / canvas.originalHeight) * pageHeight;
 
                 page.drawImage(pngImage, {
                     x: pdfX, y: pdfY,
