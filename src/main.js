@@ -1,6 +1,5 @@
 import './style.css';
 
-// 动态加载位于 public 文件夹下的脚本
 function loadScript(src) {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
@@ -11,13 +10,15 @@ function loadScript(src) {
   });
 }
 
-// ---- 全局变量和状态 ----
+// ---- 全局变量 ----
 let pdfDoc = null;
 let originalPdfBytes = null;
 let fabricCanvases = [];
 let sealImage = null;
 let sealImageElement = null;
 let currentActivePage = 1;
+// **新增: 存储画布原始尺寸，用于缩放计算**
+let originalCanvasDimensions = []; 
 
 // ---- DOM 元素获取 ----
 const pdfInputElement = document.getElementById('pdfInput');
@@ -32,6 +33,9 @@ const addSealBtn = document.getElementById('addSeal');
 const addStraddleBtn = document.getElementById('addStraddle');
 const deleteSealBtn = document.getElementById('deleteSeal');
 const exportPdfBtn = document.getElementById('exportPDF');
+// **新增: 缩放控件**
+const zoomSlider = document.getElementById('zoom-slider');
+const zoomValue = document.getElementById('zoom-value');
 
 
 // ---- 主程序入口 ----
@@ -41,7 +45,6 @@ async function main() {
     loadScript('/lib/fabric.min.js'),
     loadScript('/lib/pdf-lib.min.js'),
   ]);
-
   pdfjsLib.GlobalWorkerOptions.workerSrc = '/lib/pdf.worker.min.js';
   initializeEventListeners();
   console.log('应用已初始化，所有库加载完毕。');
@@ -55,9 +58,7 @@ function initializeEventListeners() {
         e.preventDefault();
         dropZone.classList.remove('dragover');
         const files = e.dataTransfer.files;
-        if (files.length > 0 && files[0].type === 'application/pdf') {
-            handlePdfFile(files[0]);
-        }
+        if (files.length > 0 && files[0].type === 'application/pdf') handlePdfFile(files[0]);
     });
 
     mainUploadBtn.addEventListener('click', () => pdfInputElement.click());
@@ -69,6 +70,20 @@ function initializeEventListeners() {
     deleteSealBtn.addEventListener('click', deleteSelectedObject);
     addStraddleBtn.addEventListener('click', addStraddleSeal);
     exportPdfBtn.addEventListener('click', exportPDF);
+
+    // **新增: 缩放滑块事件监听**
+    zoomSlider.addEventListener('input', (e) => {
+        const scale = parseFloat(e.target.value);
+        zoomValue.textContent = `${Math.round(scale * 100)}%`;
+        const canvas = fabricCanvases[currentActivePage - 1];
+        if (canvas) {
+            const dimensions = originalCanvasDimensions[currentActivePage - 1];
+            canvas.setZoom(scale);
+            canvas.setWidth(dimensions.width * scale);
+            canvas.setHeight(dimensions.height * scale);
+            canvas.renderAll();
+        }
+    });
 
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -91,6 +106,7 @@ async function handlePdfFile(file) {
         try {
             pdfDoc = await pdfjsLib.getDocument({ data: typedarray }).promise;
             fabricCanvases = new Array(pdfDoc.numPages).fill(null);
+            originalCanvasDimensions = new Array(pdfDoc.numPages).fill(null); // 重置尺寸记录
             await renderAllPages();
         } catch (error) {
             console.error('加载PDF失败:', error);
@@ -104,7 +120,6 @@ async function handlePdfFile(file) {
 async function renderAllPages() {
     thumbnailContainer.innerHTML = '';
     currentActivePage = 1;
-
     for (let i = 1; i <= pdfDoc.numPages; i++) {
         const thumbItem = document.createElement('div');
         thumbItem.className = 'thumbnail-item';
@@ -115,15 +130,12 @@ async function renderAllPages() {
         pageNumText.textContent = `第 ${i} 页`;
         thumbItem.appendChild(pageNumText);
         thumbnailContainer.appendChild(thumbItem);
-
         const page = await pdfDoc.getPage(i);
         const viewport = page.getViewport({ scale: 0.3 });
         thumbCanvas.height = viewport.height;
         thumbCanvas.width = viewport.width;
         await page.render({ canvasContext: thumbCanvas.getContext('2d'), viewport }).promise;
-
         thumbItem.addEventListener('click', () => showPage(i));
-
         const mainCanvasWrapper = document.createElement('div');
         mainCanvasWrapper.id = `page-wrapper-${i}`;
         mainCanvasWrapper.style.display = 'none';
@@ -136,27 +148,24 @@ async function renderAllPages() {
 }
 
 async function initializeFabricCanvasForPage(pageNum) {
-    if (fabricCanvases[pageNum - 1]) {
-        return fabricCanvases[pageNum - 1];
-    }
-
+    if (fabricCanvases[pageNum - 1]) return fabricCanvases[pageNum - 1];
     const page = await pdfDoc.getPage(pageNum);
     const viewport = page.getViewport({ scale: 2.0 });
     const canvas = document.getElementById(`canvas-${pageNum}`);
-    
     if (!canvas) {
       console.error(`无法找到 page ${pageNum} 的 canvas 元素`);
       return null;
     }
-
     canvas.height = viewport.height;
     canvas.width = viewport.width;
+
+    // **新增: 存储原始尺寸**
+    originalCanvasDimensions[pageNum - 1] = { width: viewport.width, height: viewport.height };
 
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = viewport.width;
     tempCanvas.height = viewport.height;
     await page.render({ canvasContext: tempCanvas.getContext('2d'), viewport }).promise;
-
     const fabricCanvas = new fabric.Canvas(canvas);
     fabricCanvas.setBackgroundImage(new fabric.Image(tempCanvas), fabricCanvas.renderAll.bind(fabricCanvas));
     fabricCanvases[pageNum - 1] = fabricCanvas;
@@ -166,17 +175,18 @@ async function initializeFabricCanvasForPage(pageNum) {
 async function showPage(pageNum) {
     if (!pdfDoc) return;
     currentActivePage = pageNum;
-
     document.querySelectorAll('#canvas-container > div').forEach(div => div.style.display = 'none');
     document.querySelectorAll('.thumbnail-item').forEach(item => item.classList.remove('active'));
-
     const activeThumb = document.querySelector(`.thumbnail-item[data-page-number="${pageNum}"]`);
     if (activeThumb) activeThumb.classList.add('active');
-
     const wrapper = document.getElementById(`page-wrapper-${pageNum}`);
     wrapper.style.display = 'block';
-
-    await initializeFabricCanvasForPage(pageNum);
+    
+    // **重置缩放滑块到当前页面的状态**
+    const canvas = await initializeFabricCanvasForPage(pageNum);
+    const currentZoom = canvas.getZoom();
+    zoomSlider.value = currentZoom;
+    zoomValue.textContent = `${Math.round(currentZoom * 100)}%`;
 }
 
 function handleSealFile(file) {
@@ -198,15 +208,13 @@ function handleSealFile(file) {
 function addNormalSeal() {
     if (!sealImage) return alert('请先选择印章图片！');
     if (!pdfDoc) return alert('请先上传PDF文件！');
-
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
-
     sealImage.clone((cloned) => {
-        cloned.scaleToWidth(canvas.width / 5);
+        cloned.scaleToWidth(canvas.width / 5 / canvas.getZoom()); // 根据缩放调整初始大小
         cloned.set({
-            left: (canvas.width - cloned.getScaledWidth()) / 2,
-            top: (canvas.height - cloned.getScaledHeight()) / 2,
+            left: (canvas.width / 2 - cloned.getScaledWidth() / 2) / canvas.getZoom(),
+            top: (canvas.height / 2 - cloned.getScaledHeight() / 2) / canvas.getZoom(),
             cornerSize: 10,
             cornerStyle: 'circle',
             cornerColor: '#007bff',
@@ -222,41 +230,34 @@ function addNormalSeal() {
 async function addStraddleSeal() {
     if (!sealImageElement) return alert('请先选择印章图片！');
     if (!pdfDoc) return alert('请先上传PDF文件！');
-
     const totalPages = pdfDoc.numPages;
     const pieceWidth = sealImageElement.width / totalPages;
     const groupId = `straddle-${Date.now()}`;
-    
     const refCanvas = await initializeFabricCanvasForPage(1);
     if (!refCanvas) return;
     const initialScale = (refCanvas.width / 5) / sealImageElement.width;
-
     for (let i = 0; i < totalPages; i++) {
         const pageNum = i + 1;
         const canvas = await initializeFabricCanvasForPage(pageNum);
         if (!canvas) continue;
-
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = pieceWidth;
         tempCanvas.height = sealImageElement.height;
         tempCanvas.getContext('2d').drawImage(sealImageElement, i * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
-
         (function(currentCanvas, currentIndex) {
             fabric.Image.fromURL(tempCanvas.toDataURL(), (imgPiece) => {
                 imgPiece.scale(initialScale);
                 imgPiece.set({
-                    left: currentCanvas.width - (pieceWidth * initialScale),
+                    left: currentCanvas.width - (pieceWidth * initialScale * currentCanvas.getZoom()),
                     top: 400,
                     hasControls: true,
                     borderColor: '#007bff',
-                    // **FIX 2: 锁定水平移动**
                     lockMovementX: true, 
                     straddleGroup: groupId,
                     pageIndex: currentIndex
                 });
                 currentCanvas.add(imgPiece);
                 currentCanvas.renderAll();
-                
                 const syncObjects = (target) => {
                     fabricCanvases.forEach(c => {
                         if (!c) return;
@@ -273,7 +274,6 @@ async function addStraddleSeal() {
                         c.renderAll();
                     });
                 };
-                
                 imgPiece.on('moving', () => syncObjects(imgPiece));
                 imgPiece.on('scaling', () => syncObjects(imgPiece));
                 imgPiece.on('rotating', () => syncObjects(imgPiece));
@@ -306,44 +306,36 @@ function deleteSelectedObject() {
 
 async function exportPDF() {
     if (!originalPdfBytes) return alert('请先上传一个PDF文件！');
-
     const exportButton = document.getElementById('exportPDF');
     const originalText = exportButton.textContent;
     exportButton.textContent = '正在导出...';
     exportButton.disabled = true;
-
     try {
         const { PDFDocument, degrees } = window.PDFLib;
         const pdfDoc = await PDFDocument.load(originalPdfBytes);
         const pages = pdfDoc.getPages();
-
         for (let i = 0; i < pages.length; i++) {
             const canvas = fabricCanvases[i];
             if (!canvas) continue; 
-
             const page = pages[i];
             const { width: pageWidth, height: pageHeight } = page.getSize();
-            
+            // **在导出前，临时将画布缩放还原为100%，以获得最准确的坐标**
+            const currentZoom = canvas.getZoom();
+            canvas.setZoom(1);
+            canvas.setWidth(originalCanvasDimensions[i].width);
+            canvas.setHeight(originalCanvasDimensions[i].height);
+
             const objects = canvas.getObjects();
             for (const obj of objects) {
                 if (obj.isBackgroundImage) continue;
-
-                // **FIX 1: 使用最高质量导出**
-                // 使用原始 Image Element 导出，而不是缩放后的 canvas 对象
-                // 这需要确保 obj 拥有一个对原始图像的引用，或者我们在这里重新加载它。
-                // 一个更简单且高效的方法是使用 toDataURL 的 multiplier 属性。
-                const multiplier = 2; // 使用2倍分辨率导出，可以根据需要调整
+                const multiplier = 2;
                 const imgDataUrl = obj.toDataURL({ format: 'png', multiplier: multiplier });
-                
                 const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
                 const pngImage = await pdfDoc.embedPng(pngImageBytes);
-
                 const objWidth = obj.getScaledWidth();
                 const objHeight = obj.getScaledHeight();
-                
                 const pdfX = (obj.left / canvas.width) * pageWidth;
                 const pdfY = pageHeight - ((obj.top + objHeight) / canvas.height) * pageHeight;
-
                 page.drawImage(pngImage, {
                     x: pdfX,
                     y: pdfY,
@@ -352,8 +344,12 @@ async function exportPDF() {
                     rotate: degrees(-obj.angle),
                 });
             }
+            // **导出后，恢复画布的缩放状态**
+            canvas.setZoom(currentZoom);
+            canvas.setWidth(originalCanvasDimensions[i].width * currentZoom);
+            canvas.setHeight(originalCanvasDimensions[i].height * currentZoom);
+            canvas.renderAll();
         }
-
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const link = document.createElement('a');
@@ -362,7 +358,6 @@ async function exportPDF() {
         link.download = `${fileName}_盖章版.pdf`;
         link.click();
         URL.revokeObjectURL(link.href);
-
     } catch (error) {
         console.error('导出PDF时发生错误:', error);
         alert('导出失败，详情请查看控制台。');
@@ -372,5 +367,4 @@ async function exportPDF() {
     }
 }
 
-// 启动应用
 main();
