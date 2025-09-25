@@ -102,7 +102,7 @@ function initializeEventListeners() {
 // ---- UI 与导航函数 ----
 function applyZoom() {
     if (!pdfDoc) return;
-    zoomValue.textContent = `${Math.round(globalZoomMultiplier * 90)}% (Fit-Width)`;
+    zoomValue.textContent = `${Math.round(globalZoomMultiplier * 100)}% (Fit-Width)`;
     const canvas = fabricCanvases[currentActivePage - 1];
     if (canvas) {
         const fitScale = pageFitScales[currentActivePage - 1];
@@ -270,100 +270,74 @@ function addNormalSeal() {
     });
 }
 
-// ** 核心修复：重写骑缝章相关函数 **
-// 函数1: 动态重绘整个骑缝章组
-function redrawStraddleGroup(groupId, newProps) {
-    const totalPages = pdfDoc.numPages;
-    const pieceWidth = sealImageElement.width / totalPages;
-
-    // 创建一个足够大的离屏画布来绘制旋转后的完整印章
-    const offscreenCanvas = document.createElement('canvas');
-    const ctx = offscreenCanvas.getContext('2d');
-    const diagonal = Math.sqrt(sealImageElement.width ** 2 + sealImageElement.height ** 2);
-    offscreenCanvas.width = diagonal;
-    offscreenCanvas.height = diagonal;
-
-    // 将画布中心移到旋转点，进行旋转和缩放
-    ctx.translate(diagonal / 2, diagonal / 2);
-    ctx.rotate(newProps.angle * Math.PI / 180);
-    ctx.scale(1, newProps.scaleY); // 只应用垂直缩放
-    ctx.drawImage(sealImageElement, -sealImageElement.width / 2, -sealImageElement.height / 2);
-
-    // 遍历所有页面，更新每个碎片的图像
-    fabricCanvases.forEach((canvas, index) => {
-        if (!canvas) return;
-        const groupObjects = canvas.getObjects().filter(obj => obj.straddleGroup === groupId);
-        if (groupObjects.length === 0) return;
-
-        const piece = groupObjects[0];
-        
-        // 从旋转后的离屏画布中裁剪出正确的区域
-        const tempPieceCanvas = document.createElement('canvas');
-        tempPieceCanvas.width = piece.width;
-        tempPieceCanvas.height = piece.height;
-        const tempCtx = tempPieceCanvas.getContext('2d');
-
-        // 计算裁剪的起始点 (sx, sy)
-        const sx = (diagonal - sealImageElement.width) / 2 + (index * pieceWidth);
-        const sy = (diagonal - sealImageElement.height * newProps.scaleY) / 2;
-
-        tempCtx.drawImage(offscreenCanvas, sx, sy, pieceWidth, sealImageElement.height * newProps.scaleY, 0, 0, piece.width, piece.height);
-
-        // 更新 a Fabric 对象的图像内容
-        const newImg = new Image();
-        newImg.src = tempPieceCanvas.toDataURL();
-        newImg.onload = () => {
-            piece.setElement(newImg);
-            piece.set({
-                top: newProps.top,
-                angle: 0, // 图像本身已旋转，所以对象角度归零
-            }).setCoords();
-            canvas.renderAll();
-        };
-    });
-}
-
-// 函数2: 添加骑缝章的入口
+// ** 核心修复：使用 clipPath 实现骑缝章 **
 async function addStraddleSeal() {
     if (!sealImageElement || !pdfDoc) return;
     const totalPages = pdfDoc.numPages;
-    const pieceWidth = sealImageElement.width / totalPages;
     const groupId = `straddle-${Date.now()}`;
-    
+    const sealSrc = sealImageElement.src;
+
+    // 使用第一页计算初始缩放值
+    const refCanvas = await initializeFabricCanvasForPage(1);
+    if (!refCanvas) return;
+    const initialScale = (refCanvas.originalWidth / 5) / sealImageElement.width;
+
     for (let i = 0; i < totalPages; i++) {
         const pageNum = i + 1;
         const canvas = await initializeFabricCanvasForPage(pageNum);
         if (!canvas) continue;
-        const initialScale = (canvas.originalWidth / 5) / sealImageElement.width;
-        
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = pieceWidth;
-        tempCanvas.height = sealImageElement.height;
-        tempCanvas.getContext('2d').drawImage(sealImageElement, i * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
-        
-        fabric.Image.fromURL(tempCanvas.toDataURL(), (imgPiece) => {
-            imgPiece.scale(initialScale);
-            imgPiece.set({
-                left: canvas.originalWidth - (pieceWidth * initialScale),
-                top: 400, hasControls: true, borderColor: '#007bff',
-                lockMovementX: true, straddleGroup: groupId, pageIndex: i,
-                originX: 'left', originY: 'top', 
+
+        // 这是单片在画布上的显示宽度
+        const scaledPieceWidth = (sealImageElement.width / totalPages) * initialScale;
+
+        // 为每一页都创建一个完整的印章图片对象
+        fabric.Image.fromURL(sealSrc, (img) => {
+            // 创建一个剪裁矩形，定义了只显示印章的哪一部分
+            // 这里的尺寸是相对于原始、未缩放的图片
+            const clipRect = new fabric.Rect({
+                left: (sealImageElement.width / totalPages) * i,
+                top: 0,
+                width: sealImageElement.width / totalPages,
+                height: sealImageElement.height
             });
-            canvas.add(imgPiece);
+
+            img.set({
+                scaleX: initialScale,
+                scaleY: initialScale,
+                // **关键定位**：将完整图片的左上角定位，使得被剪裁的区域刚好出现在页面右侧
+                left: canvas.originalWidth - scaledPieceWidth - (scaledPieceWidth * i),
+                top: 400,
+                hasControls: true,
+                borderColor: '#007bff',
+                lockMovementX: true,
+                straddleGroup: groupId,
+                pageIndex: i,
+                clipPath: clipRect, // 应用剪裁路径
+                originX: 'left',
+                originY: 'top',
+            });
+            
+            canvas.add(img);
             canvas.renderAll();
 
-            // 修改事件监听器
+            // 当一个碎片被修改时，同步所有其他碎片的变换
             const onModified = (e) => {
                 const target = e.target;
-                const newProps = {
-                    top: target.top,
-                    angle: target.angle,
-                    scaleY: target.scaleY
-                };
-                redrawStraddleGroup(target.straddleGroup, newProps);
+                fabricCanvases.forEach(c => {
+                    if (!c) return;
+                    c.getObjects().filter(obj => obj.straddleGroup === groupId && obj !== target)
+                     .forEach(obj => {
+                         obj.set({
+                             top: target.top,
+                             scaleX: target.scaleX,
+                             scaleY: target.scaleY,
+                             angle: target.angle,
+                         }).setCoords();
+                         c.renderAll();
+                    });
+                });
             };
-
-            imgPiece.on('mouseup', onModified); // 操作结束后触发
+            img.on('modified', onModified);
         });
     }
 }
@@ -405,10 +379,12 @@ async function exportPDF() {
             const objects = canvas.getObjects().filter(obj => !obj.isBackgroundImage);
             for (const obj of objects) {
                 const multiplier = 2;
+                // toDataURL 会自动应用 clipPath
                 const imgDataUrl = obj.toDataURL({ format: 'png', multiplier });
                 const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
                 const pngImage = await pdfDoc.embedPng(pngImageBytes);
                 
+                // 导出时使用被剪裁后的尺寸
                 const objWidth = obj.getScaledWidth();
                 const objHeight = obj.getScaledHeight();
                 
@@ -429,7 +405,6 @@ async function exportPDF() {
                     x: pdfX, y: pdfY,
                     width: (objWidth / canvas.originalWidth) * pageWidth,
                     height: (objHeight / canvas.originalHeight) * pageHeight,
-                    // **导出时使用对象自身的角度**
                     rotate: degrees(-obj.angle),
                 });
             }
