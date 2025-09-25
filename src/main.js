@@ -4,8 +4,7 @@ import './style.css';
 function loadScript(src) {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    // 路径现在从网站根目录开始，Vite会处理好
-    script.src = src; 
+    script.src = src;
     script.onload = resolve;
     script.onerror = reject;
     document.head.appendChild(script);
@@ -15,9 +14,9 @@ function loadScript(src) {
 // ---- 全局变量和状态 ----
 let pdfDoc = null;
 let originalPdfBytes = null;
-let fabricCanvases = []; 
-let sealImage = null; 
-let sealImageElement = null; 
+let fabricCanvases = [];
+let sealImage = null;
+let sealImageElement = null;
 let currentActivePage = 1;
 
 // ---- DOM 元素获取 ----
@@ -37,33 +36,21 @@ const exportPdfBtn = document.getElementById('exportPDF');
 
 // ---- 主程序入口 ----
 async function main() {
-  // *** 路径已更新 ***
-  // 加载位于 /lib/ 目录下的库文件
   await Promise.all([
     loadScript('/lib/pdf.min.js'),
     loadScript('/lib/fabric.min.js'),
     loadScript('/lib/pdf-lib.min.js'),
   ]);
-    
-  // *** 路径已更新 ***
-  // 设置PDF.js worker的路径
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/lib/pdf.worker.min.js';
 
-  // 初始化事件监听
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/lib/pdf.worker.min.js';
   initializeEventListeners();
   console.log('应用已初始化，所有库加载完毕。');
 }
 
 // ---- 事件监听初始化 ----
 function initializeEventListeners() {
-    // 拖拽区域事件
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('dragover');
-    });
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('dragover');
-    });
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('dragover');
@@ -72,33 +59,20 @@ function initializeEventListeners() {
             handlePdfFile(files[0]);
         }
     });
-    
-    // 点击上传PDF
+
     mainUploadBtn.addEventListener('click', () => pdfInputElement.click());
-    pdfInputElement.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handlePdfFile(e.target.files[0]);
-        }
-    });
-
-    // 点击上传印章
+    pdfInputElement.addEventListener('change', (e) => e.target.files.length > 0 && handlePdfFile(e.target.files[0]));
     sealUploadBtn.addEventListener('click', () => sealInputElement.click());
-    sealInputElement.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handleSealFile(e.target.files[0]);
-        }
-    });
+    sealInputElement.addEventListener('change', (e) => e.target.files.length > 0 && handleSealFile(e.target.files[0]));
 
-    // 功能按钮事件
     addSealBtn.addEventListener('click', addNormalSeal);
     deleteSealBtn.addEventListener('click', deleteSelectedObject);
     addStraddleBtn.addEventListener('click', addStraddleSeal);
     exportPdfBtn.addEventListener('click', exportPDF);
 
-    // 监听键盘删除事件
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Delete' || e.key === 'Backspace') {
-            e.preventDefault(); // 防止浏览器后退
+            e.preventDefault();
             deleteSelectedObject();
         }
     });
@@ -106,25 +80,18 @@ function initializeEventListeners() {
 
 // ---- 功能函数 ----
 
-/**
- * 处理上传的PDF文件
- * @param {File} file 
- */
 async function handlePdfFile(file) {
-    console.log('开始处理PDF文件:', file.name);
     dropZone.classList.add('hidden');
     thumbnailContainer.innerHTML = '<p style="padding: 20px; text-align: center;">正在渲染页面...</p>';
     canvasContainer.innerHTML = '';
-
     const fileReader = new FileReader();
     fileReader.onload = async (e) => {
         const typedarray = new Uint8Array(e.target.result);
-        originalPdfBytes = typedarray; // 保存原始字节
+        originalPdfBytes = typedarray;
         try {
             pdfDoc = await pdfjsLib.getDocument({ data: typedarray }).promise;
-            console.log(`PDF加载成功，共 ${pdfDoc.numPages} 页。`);
             await renderAllPages();
-        } catch(error) {
+        } catch (error) {
             console.error('加载PDF失败:', error);
             alert('无法加载此PDF文件，请检查文件是否损坏。');
             dropZone.classList.remove('hidden');
@@ -133,9 +100,6 @@ async function handlePdfFile(file) {
     fileReader.readAsArrayBuffer(file);
 }
 
-/**
- * 渲染所有PDF页面为Canvas，并创建缩略图
- */
 async function renderAllPages() {
     thumbnailContainer.innerHTML = '';
     fabricCanvases = [];
@@ -168,22 +132,18 @@ async function renderAllPages() {
         mainCanvasWrapper.appendChild(mainCanvas);
         canvasContainer.appendChild(mainCanvasWrapper);
     }
-    await showPage(1); // 默认显示第一页
+    await showPage(1);
 }
 
-/**
- * 在主工作区显示指定页码的PDF
- * @param {number} pageNum 
- */
 async function showPage(pageNum) {
     if (!pdfDoc) return;
     currentActivePage = pageNum;
-    
+
     document.querySelectorAll('#canvas-container > div').forEach(div => div.style.display = 'none');
     document.querySelectorAll('.thumbnail-item').forEach(item => item.classList.remove('active'));
-    
+
     const activeThumb = document.querySelector(`.thumbnail-item[data-page-number="${pageNum}"]`);
-    if(activeThumb) activeThumb.classList.add('active');
+    if (activeThumb) activeThumb.classList.add('active');
 
     const wrapper = document.getElementById(`page-wrapper-${pageNum}`);
     wrapper.style.display = 'block';
@@ -194,61 +154,43 @@ async function showPage(pageNum) {
         const canvas = document.getElementById(`canvas-${pageNum}`);
         canvas.height = viewport.height;
         canvas.width = viewport.width;
-        
+
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = viewport.width;
         tempCanvas.height = viewport.height;
         await page.render({ canvasContext: tempCanvas.getContext('2d'), viewport }).promise;
 
         const fabricCanvas = new fabric.Canvas(canvas);
-        fabricCanvas.setBackgroundImage(
-            new fabric.Image(tempCanvas),
-            fabricCanvas.renderAll.bind(fabricCanvas)
-        );
+        fabricCanvas.setBackgroundImage(new fabric.Image(tempCanvas), fabricCanvas.renderAll.bind(fabricCanvas));
         fabricCanvases[pageNum - 1] = fabricCanvas;
     }
 }
 
-/**
- * 处理上传的印章文件
- * @param {File} file 
- */
 function handleSealFile(file) {
     const reader = new FileReader();
-    reader.onload = function (event) {
+    reader.onload = function(event) {
         sealImageElement = new Image();
         sealImageElement.src = event.target.result;
         sealImageElement.onload = () => {
-             fabric.Image.fromURL(event.target.result, function (img) {
+            fabric.Image.fromURL(event.target.result, function(img) {
                 sealImage = img;
-                console.log('印章图片加载成功。');
                 sealNameElement.textContent = file.name;
-                alert('印章已准备好，现在可以点击“添加印章”按钮了。');
+                alert('印章已准备好，现在可以添加印章了。');
             });
         }
     };
     reader.readAsDataURL(file);
 }
 
-/**
- * 添加普通印章到当前活动页面
- */
 function addNormalSeal() {
-    if (!sealImage) {
-        alert('请先选择印章图片！');
-        return;
-    }
-    if (fabricCanvases.length === 0) {
-        alert('请先上传PDF文件！');
-        return;
-    }
+    if (!sealImage) return alert('请先选择印章图片！');
+    if (fabricCanvases.length === 0) return alert('请先上传PDF文件！');
 
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
 
     sealImage.clone((cloned) => {
-        const scale = canvas.width / 8;
-        cloned.scaleToWidth(scale);
+        cloned.scaleToWidth(canvas.width / 8);
         cloned.set({
             left: (canvas.width - cloned.getScaledWidth()) / 2,
             top: (canvas.height - cloned.getScaledHeight()) / 2,
@@ -264,137 +206,120 @@ function addNormalSeal() {
     });
 }
 
-/**
- * 添加骑缝章到所有页面
- */
 function addStraddleSeal() {
-    if (!sealImageElement) {
-        alert('请先选择印章图片！');
-        return;
-    }
-    if (fabricCanvases.length === 0) {
-        alert('请先上传PDF文件！');
-        return;
-    }
+    if (!sealImageElement) return alert('请先选择印章图片！');
+    if (fabricCanvases.length === 0) return alert('请先上传PDF文件！');
 
     const totalPages = pdfDoc.numPages;
     const pieceWidth = sealImageElement.width / totalPages;
     const initialScale = (fabricCanvases[0].width / 8) / sealImageElement.width;
-
-    const groupId = `mainStraddle-${Date.now()}`; // 为这一组骑缝章生成一个唯一的ID
+    const groupId = `straddle-${Date.now()}`;
 
     fabricCanvases.forEach((canvas, index) => {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = pieceWidth;
         tempCanvas.height = sealImageElement.height;
-        const ctx = tempCanvas.getContext('2d');
-        ctx.drawImage(sealImageElement, index * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
-        
-        const pieceDataUrl = tempCanvas.toDataURL();
+        tempCanvas.getContext('2d').drawImage(sealImageElement, index * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
 
-        fabric.Image.fromURL(pieceDataUrl, (imgPiece) => {
+        fabric.Image.fromURL(tempCanvas.toDataURL(), (imgPiece) => {
             imgPiece.scale(initialScale);
             imgPiece.set({
                 left: canvas.width - (pieceWidth * initialScale),
                 top: 200,
-                hasControls: false,
+                // **FIX 1: 启用控制点**
+                hasControls: true, 
                 borderColor: '#007bff',
                 straddleGroup: groupId,
                 pageIndex: index
             });
             canvas.add(imgPiece);
             canvas.renderAll();
-
-            imgPiece.on('moving', function() {
-                const currentTop = this.top;
+            
+            // **FIX 1.1: 添加同步事件监听**
+            const syncObjects = (target) => {
                 fabricCanvases.forEach(c => {
                     c.getObjects().forEach(obj => {
-                        if (obj.straddleGroup === groupId && obj !== this) {
-                            obj.set('top', currentTop).setCoords();
+                        if (obj.straddleGroup === groupId && obj !== target) {
+                            obj.set({
+                                top: target.top,
+                                scaleX: target.scaleX,
+                                scaleY: target.scaleY,
+                                angle: target.angle
+                            }).setCoords();
                         }
                     });
                     c.renderAll();
                 });
-            });
+            };
+            
+            imgPiece.on('moving', () => syncObjects(imgPiece));
+            imgPiece.on('scaling', () => syncObjects(imgPiece));
+            imgPiece.on('rotating', () => syncObjects(imgPiece));
         });
     });
 }
 
-/**
- * 删除当前选中的对象（普通章或骑缝章的一部分）
- */
 function deleteSelectedObject() {
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
 
     const activeObject = canvas.getActiveObject();
     if (activeObject) {
-        if (activeObject.straddleGroup) {
-            const groupId = activeObject.straddleGroup;
-            fabricCanvases.forEach(c => {
-                const objectsToDelete = c.getObjects().filter(obj => obj.straddleGroup === groupId);
-                objectsToDelete.forEach(obj => c.remove(obj));
-                c.renderAll();
-            });
-        } else {
-            canvas.remove(activeObject);
-            canvas.renderAll();
+        if (confirm('确定要删除选中的印章吗？')) {
+            if (activeObject.straddleGroup) {
+                const groupId = activeObject.straddleGroup;
+                fabricCanvases.forEach(c => {
+                    const objectsToDelete = c.getObjects().filter(obj => obj.straddleGroup === groupId);
+                    objectsToDelete.forEach(obj => c.remove(obj));
+                    c.renderAll();
+                });
+            } else {
+                canvas.remove(activeObject);
+                canvas.renderAll();
+            }
         }
-    } else {
-        // 用户可能没有选中任何东西，静默处理即可，无需弹窗
     }
 }
 
-/**
- * 导出带有印章的PDF文件
- */
+// **FIX 2: 重构导出逻辑**
 async function exportPDF() {
-    if (!originalPdfBytes) {
-        alert('请先上传一个PDF文件！');
-        return;
-    }
-    
+    if (!originalPdfBytes) return alert('请先上传一个PDF文件！');
+
     const exportButton = document.getElementById('exportPDF');
     const originalText = exportButton.textContent;
     exportButton.textContent = '正在导出...';
     exportButton.disabled = true;
 
     try {
-        const { PDFDocument, degrees } = window.PDFLib;
+        const { PDFDocument } = window.PDFLib;
         const pdfDoc = await PDFDocument.load(originalPdfBytes);
         const pages = pdfDoc.getPages();
 
-        for (let i = 0; i < fabricCanvases.length; i++) {
+        for (let i = 0; i < pages.length; i++) {
             const canvas = fabricCanvases[i];
-            if (!canvas) continue;
+            if (!canvas) {
+                // 如果某一页没有被渲染过，确保它仍然被包含在最终PDF中
+                continue;
+            }
+
+            // 将整个Fabric Canvas导出为一张图片
+            const dataUrl = canvas.toDataURL({ format: 'png', quality: 1.0 });
+            const imageBytes = await fetch(dataUrl).then(res => res.arrayBuffer());
+            const pngImage = await pdfDoc.embedPng(imageBytes);
             
             const page = pages[i];
-            const { width: pageWidth, height: pageHeight } = page.getSize();
+            const { width, height } = page.getSize();
             
-            const objects = canvas.getObjects().filter(obj => obj.type === 'image');
-            for (const obj of objects) {
-                const imgDataUrl = obj.toDataURL({ format: 'png' });
-                const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
-                const pngImage = await pdfDoc.embedPng(pngImageBytes);
-
-                const objWidth = obj.getScaledWidth();
-                const objHeight = obj.getScaledHeight();
-                
-                const x = obj.left;
-                const y = pageHeight - obj.top - objHeight;
-
-                page.drawImage(pngImage, {
-                    x: x / canvas.width * pageWidth,
-                    y: y / canvas.height * pageHeight,
-                    width: objWidth / canvas.width * pageWidth,
-                    height: objHeight / canvas.height * pageHeight,
-                    rotate: degrees(-obj.angle),
-                });
-            }
+            // 将图片绘制到PDF页面上，完全覆盖
+            page.drawImage(pngImage, {
+                x: 0,
+                y: 0,
+                width: width,
+                height: height,
+            });
         }
 
         const pdfBytes = await pdfDoc.save();
-
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -403,7 +328,7 @@ async function exportPDF() {
         link.click();
         URL.revokeObjectURL(link.href);
 
-    } catch(error) {
+    } catch (error) {
         console.error('导出PDF时发生错误:', error);
         alert('导出失败，详情请查看控制台。');
     } finally {
@@ -411,7 +336,6 @@ async function exportPDF() {
         exportButton.disabled = false;
     }
 }
-
 
 // 启动应用
 main();
