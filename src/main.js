@@ -20,7 +20,7 @@ let currentActivePage = 1;
 let totalPages = 0;
 let pageFitScales = [];
 let globalZoomMultiplier = 1.0;
-let sealRotation = 0; // **新增：存储印章预设旋转角度**
+let sealRotation = 0;
 
 // ---- DOM 元素获取 ----
 const appContainer = document.getElementById('app');
@@ -42,7 +42,6 @@ const zoomSlider = document.getElementById('zoom-slider');
 const zoomValue = document.getElementById('zoom-value');
 const pageIndicator = document.getElementById('page-indicator');
 const pageSelector = document.getElementById('page-selector');
-// **新增：旋转控制器DOM**
 const rotationSlider = document.getElementById('rotation-slider');
 const rotationInput = document.getElementById('rotation-input');
 
@@ -93,7 +92,6 @@ function initializeEventListeners() {
         applyZoom();
     });
 
-    // **新增：旋转控制器事件监听**
     rotationSlider.addEventListener('input', (e) => {
         const angle = parseInt(e.target.value, 10);
         rotationInput.value = angle;
@@ -118,7 +116,6 @@ function initializeEventListeners() {
 }
 
 // ---- UI 与导航函数 ----
-// ... (applyZoom, updatePageNavigator 无变化)
 function applyZoom() {
     if (!pdfDoc) return;
     zoomValue.textContent = `${Math.round(globalZoomMultiplier * 100)}% (Fit-Width)`;
@@ -283,7 +280,6 @@ function addNormalSeal() {
             originX: 'center', originY: 'center',
             cornerSize: 10, cornerStyle: 'circle', cornerColor: '#007bff',
             transparentCorners: false, borderColor: '#007bff',
-            // **应用预设角度并锁定旋转**
             angle: sealRotation,
             lockRotation: true,
         });
@@ -293,48 +289,56 @@ function addNormalSeal() {
     });
 }
 
+// ** 核心修复：重写骑缝章函数 **
 async function addStraddleSeal() {
     if (!sealImageElement || !pdfDoc) return;
     const totalPages = pdfDoc.numPages;
     const pieceWidth = sealImageElement.width / totalPages;
     const groupId = `straddle-${Date.now()}`;
     
-    // **先将完整印章按预设角度旋转**
     const rotatedSealCanvas = document.createElement('canvas');
     const ctx = rotatedSealCanvas.getContext('2d');
-    const diagonal = Math.sqrt(sealImageElement.width ** 2 + sealImageElement.height ** 2);
+    const diagonal = Math.hypot(sealImageElement.width, sealImageElement.height);
     rotatedSealCanvas.width = diagonal;
     rotatedSealCanvas.height = diagonal;
     ctx.translate(diagonal / 2, diagonal / 2);
     ctx.rotate(sealRotation * Math.PI / 180);
     ctx.drawImage(sealImageElement, -sealImageElement.width / 2, -sealImageElement.height / 2);
-    const rotatedSealImage = new Image();
-    rotatedSealImage.src = rotatedSealCanvas.toDataURL();
     
-    rotatedSealImage.onload = async () => {
+    const fullRotatedImage = new Image();
+    fullRotatedImage.src = rotatedSealCanvas.toDataURL();
+    
+    fullRotatedImage.onload = async () => {
         for (let i = 0; i < totalPages; i++) {
             const pageNum = i + 1;
             const canvas = await initializeFabricCanvasForPage(pageNum);
             if (!canvas) continue;
-            const initialScale = (canvas.originalWidth / 5) / rotatedSealImage.width;
+
+            const initialScale = (canvas.originalWidth / 5) / sealImageElement.width;
             
             const tempPieceCanvas = document.createElement('canvas');
-            const pieceHeight = rotatedSealImage.height;
-            tempPieceCanvas.width = pieceWidth;
-            tempPieceCanvas.height = pieceHeight;
-            // 从旋转后的完整印章图中切割
-            const sx = (diagonal - sealImageElement.width) / 2 + (i * pieceWidth);
-            const sy = (diagonal - sealImageElement.height) / 2;
-            tempPieceCanvas.getContext('2d').drawImage(rotatedSealImage, sx, sy, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, pieceHeight);
+            // 按比例计算切割后的尺寸
+            const rotatedWidth = fullRotatedImage.width;
+            const rotatedHeight = fullRotatedImage.height;
+            const sliceWidth = pieceWidth * (rotatedWidth / sealImageElement.width);
             
+            tempPieceCanvas.width = sliceWidth;
+            tempPieceCanvas.height = rotatedHeight;
+
+            const sx = i * sliceWidth;
+
+            tempPieceCanvas.getContext('2d').drawImage(fullRotatedImage, sx, 0, sliceWidth, rotatedHeight, 0, 0, sliceWidth, rotatedHeight);
+
             fabric.Image.fromURL(tempPieceCanvas.toDataURL(), (imgPiece) => {
                 imgPiece.scale(initialScale);
                 imgPiece.set({
-                    left: canvas.originalWidth - (rotatedSealImage.width * initialScale),
-                    top: 400, hasControls: true, borderColor: '#007bff',
+                    left: canvas.originalWidth - (rotatedWidth * initialScale) + (i * sliceWidth * initialScale),
+                    top: 400,
+                    hasControls: true, borderColor: '#007bff',
                     lockMovementX: true, 
-                    lockRotation: true, // **锁定旋转**
-                    straddleGroup: groupId, pageIndex: i,
+                    lockRotation: true,
+                    straddleGroup: groupId,
+                    pageIndex: i,
                     originX: 'left', originY: 'top', 
                 });
                 canvas.add(imgPiece);
@@ -357,8 +361,8 @@ async function addStraddleSeal() {
     }
 }
 
+
 function deleteSelectedObject() {
-    // ... (此函数无变化)
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
     const activeObject = canvas.getActiveObject();
@@ -378,7 +382,6 @@ function deleteSelectedObject() {
 }
 
 async function exportPDF() {
-    // ... (此函数无变化)
     if (!originalPdfBytes) return alert('请先上传PDF文件！');
     const exportButton = document.getElementById('exportPDF');
     exportButton.textContent = '导出中...'; exportButton.disabled = true;
@@ -394,7 +397,12 @@ async function exportPDF() {
             
             const objects = canvas.getObjects().filter(obj => !obj.isBackgroundImage);
             for (const obj of objects) {
-                const multiplier = 2;
+                // ** 核心修复：使用 aCoords 获取绝对坐标 **
+                const aCoords = obj.aCoords;
+                if (!aCoords) continue;
+                const { tl } = aCoords; // Top-Left corner
+
+                const multiplier = 2.5; // 提高导出分辨率
                 const imgDataUrl = obj.toDataURL({ format: 'png', multiplier });
                 const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
                 const pngImage = await pdfDoc.embedPng(pngImageBytes);
@@ -402,19 +410,17 @@ async function exportPDF() {
                 const objWidth = obj.getScaledWidth();
                 const objHeight = obj.getScaledHeight();
                 
-                let objLeft = obj.left;
-                let objTop = obj.top;
-
-                if (obj.originX === 'center') objLeft -= objWidth / 2;
-                if (obj.originY === 'center') objTop -= objHeight / 2;
-                
-                const pdfX = (objLeft / canvas.originalWidth) * pageWidth;
-                const pdfY = pageHeight - ((objTop + objHeight) / canvas.originalHeight) * pageHeight;
+                const pdfX = (tl.x / canvas.originalWidth) * pageWidth;
+                const pdfY = pageHeight - ((tl.y + objHeight) / canvas.originalHeight) * pageHeight;
+                // 注意：因为 aCoords 已经包含了旋转后的位置，所以 pdf-lib 中绘制时，宽度和高度也要相应地映射
+                const pdfWidth = (objWidth / canvas.originalWidth) * pageWidth;
+                const pdfHeight = (objHeight / canvas.originalHeight) * pageHeight;
 
                 page.drawImage(pngImage, {
-                    x: pdfX, y: pdfY,
-                    width: (objWidth / canvas.originalWidth) * pageWidth,
-                    height: (objHeight / canvas.originalHeight) * pageHeight,
+                    x: pdfX, 
+                    y: pdfY,
+                    width: pdfWidth,
+                    height: pdfHeight,
                     rotate: degrees(-obj.angle),
                 });
             }
