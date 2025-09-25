@@ -101,14 +101,20 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 }
 
 /* 中间主工作区 */
-.main-content-wrapper { padding: 0; position: relative; }
+.main-content-wrapper { 
+  padding: 0; 
+  position: relative; 
+  /* ** 核心修复：强制此容器不可被内容撑开 ** */
+  overflow: hidden;
+}
 .main-content {
   overflow: auto;
   flex-grow: 1;
   display: flex;
   padding: 2rem;
   background-color: var(--bg-color);
-  position: relative; /* **FIX 1: 关键修复，为拖拽区提供定位锚点** */
+  position: relative;
+  height: 100%; /* 确保它占满父容器 */
 }
 
 /* 拖拽区域 */
@@ -124,7 +130,6 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   transition: all 0.2s;
 }
 #app.no-pdf-loaded .main-content {
-  /* 当没有PDF时，让拖拽区充满工作区 */
   padding: 0;
 }
 #app.no-pdf-loaded .drop-zone {
@@ -141,7 +146,7 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 .drop-zone-prompt h2 { color: var(--text-color); margin: 1rem 0; }
 
 .canvas-wrapper {
-  margin: auto; /* 保证在可滚动区域内居中 */
+  margin: auto;
 }
 
 .canvas-wrapper .canvas-container {
