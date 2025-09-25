@@ -1,4 +1,4 @@
-toolbar:root {
+:root {
   --font-family-sans: "Inter", "Helvetica Neue", "Helvetica", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
   --primary-color: #007bff;
   --primary-hover-color: #0056b3;
@@ -32,7 +32,7 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   grid-template-columns: var(--sidebar-collapsed-width) 1fr 320px;
 }
 
-.sidebar, .main-content-wrapper, . {
+.sidebar, .main-content-wrapper, .toolbar {
   background-color: var(--surface-color);
   border-radius: var(--border-radius);
   box-shadow: var(--box-shadow);
@@ -107,8 +107,6 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   overflow: auto; flex-grow: 1; display: flex; padding: 2rem;
   background-color: var(--bg-color); position: relative; height: 100%;
 }
-
-/* 拖拽区域 */
 .drop-zone {
   display: none; flex-direction: column; align-items: center; justify-content: center;
   width: 100%; height: 100%; border: 3px dashed var(--border-color);
@@ -163,36 +161,32 @@ datalist {
   background: repeating-linear-gradient(to right, var(--border-color) 0, var(--border-color) 1px, transparent 1px, transparent 10%);
 }
 
+
 /* 右侧工具栏 */
-.toolbar { 
-  padding: 1.5rem;
-  /* ** 核心修复：添加垂直滚动 ** */
-  overflow-y: auto;
-}
+.toolbar { padding: 1.5rem; }
 .toolbar-header {
-  text-align: center; margin-bottom: 1rem;
+  text-align: center; margin-bottom: 2rem;
   border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;
 }
 .toolbar-header h1 { font-size: 2rem; }
-.tool-section { margin-bottom: 0.5rem; }
+.tool-section { margin-bottom: 1.5rem; }
 .tool-section h3 {
   font-size: 1rem; margin-bottom: 1rem; color: var(--text-color-light);
   text-transform: uppercase; letter-spacing: 1px;
 }
-.file-inputs, .button-group { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.5rem; }
-.button-group { margin-bottom: 0.5rem; }
+.file-inputs, .button-group { display: flex; flex-direction: column; gap: 0.75rem; }
+.button-group { margin-bottom: 1rem; }
 .toolbar-footer {
-    margin-top: 1rem; text-align: center; font-size: 0.875rem;
+    margin-top: auto; text-align: center; font-size: 0.875rem;
     color: var(--text-color-light); padding-top: 1rem;
     border-top: 1px solid var(--border-color);
-    flex-shrink: 0; /* 防止页脚被压缩 */
 }
 .toolbar-footer a { color: var(--primary-color); text-decoration: none; }
 
 /* 印章预览与控制 */
 .seal-preview-container {
   width: 100%; height: 150px; border: 1px dashed var(--border-color);
-  border-radius: var(--border-radius);
+  border-radius: var(--border-radius); margin-bottom: 1rem;
   display: flex; align-items: center; justify-content: center;
   background-color: #f8f9fa; position: relative; overflow: hidden;
 }
@@ -202,10 +196,12 @@ datalist {
 }
 .seal-preview-placeholder { color: var(--text-color-light); }
 .hidden { display: none; }
+
 .rotation-controls {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    margin-bottom: 1rem;
 }
 .rotation-controls label {
     font-size: 0.875rem;
