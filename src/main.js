@@ -148,28 +148,21 @@ function updatePageNavigator() {
 function getRotatedCroppedImage(sourceImage, angle) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    
     const w = sourceImage.width;
     const h = sourceImage.height;
-    
     const diagonal = Math.sqrt(w * w + h * h);
     canvas.width = diagonal;
     canvas.height = diagonal;
-    
     ctx.translate(diagonal / 2, diagonal / 2);
     ctx.rotate(angle * Math.PI / 180);
     ctx.drawImage(sourceImage, -w / 2, -h / 2);
-    
     const finalCanvas = document.createElement('canvas');
     finalCanvas.width = w;
     finalCanvas.height = h;
     const finalCtx = finalCanvas.getContext('2d');
-    
     finalCtx.drawImage(canvas, (diagonal - w) / 2, (diagonal - h) / 2, w, h, 0, 0, w, h);
-    
     return finalCanvas.toDataURL();
 }
-
 
 async function handlePdfFile(file) {
     appContainer.classList.remove('no-pdf-loaded');
@@ -227,28 +220,22 @@ async function renderAllPages() {
 
 async function initializeFabricCanvasForPage(pageNum, forceRecalculate = false) {
     if (fabricCanvases[pageNum - 1] && !forceRecalculate) return fabricCanvases[pageNum - 1];
-
     const page = await pdfDoc.getPage(pageNum);
     const highResViewport = page.getViewport({ scale: 2.0 });
     const originalWidth = highResViewport.width;
     const originalHeight = highResViewport.height;
-
     const containerWidth = mainContent.clientWidth - 40;
     const fitScale = containerWidth / originalWidth;
     pageFitScales[pageNum - 1] = fitScale;
-
     const canvasEl = document.getElementById(`canvas-${pageNum}`);
     const fabricCanvas = fabricCanvases[pageNum - 1] || new fabric.Canvas(canvasEl);
-    
     if (!fabricCanvases[pageNum - 1]) {
         fabricCanvas.originalWidth = originalWidth;
         fabricCanvas.originalHeight = originalHeight;
-        
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = originalWidth;
         tempCanvas.height = originalHeight;
         await page.render({ canvasContext: tempCanvas.getContext('2d'), viewport: highResViewport }).promise;
-        
         fabricCanvas.setBackgroundImage(new fabric.Image(tempCanvas), fabricCanvas.renderAll.bind(fabricCanvas));
         fabricCanvases[pageNum - 1] = fabricCanvas;
     }
@@ -258,16 +245,12 @@ async function initializeFabricCanvasForPage(pageNum, forceRecalculate = false) 
 async function showPage(pageNum, forceRecalculate = false) {
     if (!pdfDoc) return;
     currentActivePage = pageNum;
-    
     document.querySelectorAll('.canvas-wrapper').forEach(div => div.style.display = 'none');
     document.querySelectorAll('.thumbnail-item').forEach(item => item.classList.remove('active'));
-    
     const activeThumb = document.querySelector(`.thumbnail-item[data-page-number="${pageNum}"]`);
     if (activeThumb) activeThumb.classList.add('active');
-    
     const wrapper = document.getElementById(`page-wrapper-${pageNum}`);
     wrapper.style.display = 'block';
-
     await initializeFabricCanvasForPage(pageNum, forceRecalculate);
     applyZoom();
     updatePageNavigator();
@@ -279,11 +262,9 @@ function handleSealFile(file) {
         const imageUrl = event.target.result;
         sealImageElement = new Image();
         sealImageElement.src = imageUrl;
-
         sealPreviewImg.src = imageUrl;
         sealPreviewImg.classList.remove('hidden');
         sealPlaceholder.classList.add('hidden');
-
         sealImageElement.onload = () => {
             alert('印章已准备好。');
         }
@@ -295,9 +276,7 @@ function addNormalSeal() {
     if (!sealImageElement || !pdfDoc) return;
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
-
     const rotatedSealUrl = getRotatedCroppedImage(sealImageElement, sealRotation);
-    
     fabric.Image.fromURL(rotatedSealUrl, (img) => {
         img.scaleToWidth(canvas.originalWidth / 5);
         img.set({
@@ -316,37 +295,29 @@ function addNormalSeal() {
 
 async function addStraddleSeal() {
     if (!sealImageElement || !pdfDoc) return;
-    
     const rotatedSealUrl = getRotatedCroppedImage(sealImageElement, sealRotation);
     const rotatedSealImage = new Image();
     rotatedSealImage.src = rotatedSealUrl;
-    
     rotatedSealImage.onload = async () => {
         const totalPages = pdfDoc.numPages;
         const pieceWidth = sealImageElement.width / totalPages;
         const groupId = `straddle-${Date.now()}`;
-        
         for (let i = 0; i < totalPages; i++) {
             const pageNum = i + 1;
             const canvas = await initializeFabricCanvasForPage(pageNum);
             if (!canvas) continue;
-            
             const initialScale = (canvas.originalWidth / 5) / sealImageElement.width;
-            
             const tempPieceCanvas = document.createElement('canvas');
             tempPieceCanvas.width = pieceWidth;
             tempPieceCanvas.height = sealImageElement.height;
-            
             tempPieceCanvas.getContext('2d').drawImage(rotatedSealImage, i * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
             
             fabric.Image.fromURL(tempPieceCanvas.toDataURL(), (imgPiece) => {
                 imgPiece.scale(initialScale);
-                const scaledFullWidth = sealImageElement.width * initialScale;
+                // ** 核心修复：使用 pieceWidth * initialScale 来计算正确的 left 位置 **
                 const scaledPieceWidth = pieceWidth * initialScale;
-
                 imgPiece.set({
-                    // ** 核心修复：精确计算每个碎片的位置 **
-                    left: canvas.originalWidth - scaledFullWidth + (i * scaledPieceWidth),
+                    left: canvas.originalWidth - scaledPieceWidth,
                     top: 400, hasControls: true, borderColor: '#007bff',
                     lockMovementX: true, 
                     lockRotation: true,
@@ -356,7 +327,6 @@ async function addStraddleSeal() {
                 });
                 canvas.add(imgPiece);
                 canvas.renderAll();
-                
                 const syncObjects = (target) => {
                     fabricCanvases.forEach((c) => {
                         if (!c) return;
@@ -373,7 +343,6 @@ async function addStraddleSeal() {
         }
     }
 }
-
 
 function deleteSelectedObject() {
     const canvas = fabricCanvases[currentActivePage - 1];
@@ -407,26 +376,20 @@ async function exportPDF() {
             if (!canvas) continue;
             const page = pages[i];
             const { width: pageWidth, height: pageHeight } = page.getSize();
-            
             const objects = canvas.getObjects().filter(obj => !obj.isBackgroundImage);
             for (const obj of objects) {
                 const multiplier = 2;
                 const imgDataUrl = obj.toDataURL({ format: 'png', multiplier });
                 const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
                 const pngImage = await pdfDoc.embedPng(pngImageBytes);
-                
                 const objWidth = obj.getScaledWidth();
                 const objHeight = obj.getScaledHeight();
-                
                 let objLeft = obj.left;
                 let objTop = obj.top;
-
                 if (obj.originX === 'center') objLeft -= objWidth / 2;
                 if (obj.originY === 'center') objTop -= objHeight / 2;
-                
                 const pdfX = (objLeft / canvas.originalWidth) * pageWidth;
                 const pdfY = pageHeight - ((objTop + objHeight) / canvas.originalHeight) * pageHeight;
-
                 page.drawImage(pngImage, {
                     x: pdfX, y: pdfY,
                     width: (objWidth / canvas.originalWidth) * pageWidth,
