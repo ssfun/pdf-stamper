@@ -1,4 +1,3 @@
-/* 全局样式和变量 */
 :root {
   --font-family-sans: "Inter", "Helvetica Neue", "Helvetica", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
   --primary-color: #007bff;
@@ -14,29 +13,25 @@
   --text-color-light: #6c757d;
   --border-radius: 8px;
   --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  /* **FIX 1: 定义侧边栏宽度变量** */
+  --sidebar-width: 220px;
 }
-
-/* 基础重置 */
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  font-family: var(--font-family-sans);
-  background-color: var(--bg-color);
-  color: var(--text-color);
-  overflow: hidden;
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-family-sans); background-color: var(--bg-color); color: var(--text-color); overflow: hidden; }
 
 /* 主应用布局 */
 #app {
   display: grid;
-  grid-template-columns: 220px 1fr 320px;
+  /* **FIX 1 & 3: 使用CSS变量和calc()动态计算布局** */
+  grid-template-columns: var(--sidebar-width) 1fr 320px;
   height: 100vh;
   gap: 1rem;
   padding: 1rem;
+  transition: grid-template-columns 0.3s ease-in-out; /* 平滑过渡 */
+}
+/* **FIX 1: 侧边栏收起时的布局** */
+#app.sidebar-collapsed {
+  grid-template-columns: 0px 1fr 320px;
 }
 
 .sidebar, .main-content-wrapper, .toolbar {
@@ -49,8 +44,28 @@ body {
 }
 
 /* 左侧边栏 */
-.sidebar { padding: 1rem; }
-.sidebar-header h2 { font-size: 1.25rem; margin-bottom: 1rem; }
+.sidebar {
+  padding: 1rem;
+  /* **FIX 1: 控制溢出和过渡** */
+  overflow: hidden;
+  transition: padding 0.3s ease-in-out, transform 0.3s ease-in-out;
+  position: relative;
+}
+/* **FIX 1: 侧边栏收起时的样式** */
+#app.sidebar-collapsed .sidebar {
+  padding-left: 0;
+  padding-right: 0;
+  transform: translateX(calc(-1 * var(--sidebar-width)));
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
+}
+.sidebar-header h2 { font-size: 1.25rem; }
 .thumbnail-container { overflow-y: auto; flex-grow: 1; }
 .thumbnail-container .empty-state {
   height: 100%;
@@ -71,28 +86,50 @@ body {
   margin-left: auto;
   margin-right: auto;
 }
-.thumbnail-item canvas {
-  width: 100%;
-  display: block;
-  border-radius: 2px;
-}
+.thumbnail-item canvas { width: 100%; display: block; border-radius: 2px; }
 .thumbnail-item.active { border-color: var(--primary-color); }
 .thumbnail-item p { text-align: center; margin-top: 0.5rem; font-size: 0.875rem; }
+
+/* **FIX 1: 侧边栏开关按钮样式** */
+.sidebar-toggle-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--text-color-light);
+  border-radius: var(--border-radius);
+  transition: color 0.2s, background-color 0.2s;
+}
+.sidebar-toggle-btn:hover {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+#app.sidebar-collapsed .sidebar-toggle-btn {
+  /* 当收起时，让按钮“伸”出来 */
+  position: absolute;
+  top: 1rem;
+  right: -40px; /* 定位到侧边栏外部 */
+  background-color: var(--surface-color);
+  box-shadow: var(--box-shadow);
+  z-index: 100;
+}
+/* 旋转图标 */
+#app.sidebar-collapsed .sidebar-toggle-btn svg {
+  transform: rotate(180deg);
+}
 
 /* 中间主工作区 */
 .main-content-wrapper { padding: 0; }
 .main-content {
-  overflow: auto; /* **FIX 3: 确保可滚动** */
+  overflow: auto;
   flex-grow: 1;
-  display: flex; /* 使用 flex 布局来居中 */
-  /* justify-content: center; 和 align-items: flex-start; 移动到 #canvas-container 的父级 */
+  display: flex;
   padding: 2rem;
   background-color: var(--bg-color);
 }
 #canvas-container {
   box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-  margin: auto; /* 在 flex 容器中实现真正的居中 */
-  /* transition 用于平滑缩放效果 */
+  margin: auto;
   transition: transform 0.1s ease-in-out;
 }
 
@@ -103,27 +140,37 @@ body {
   border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  justify-content: space-between; /* 两端对齐 */
+  gap: 1.5rem;
   font-size: 0.875rem;
+}
+.zoom-controls, .page-navigator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* **FIX 4: 页面导航样式** */
+#page-indicator {
+  font-weight: bold;
+  min-width: 80px;
+}
+.page-selector {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--surface-color);
 }
 #zoom-slider { flex-grow: 1; max-width: 200px; }
 #zoom-value { font-weight: bold; min-width: 45px; text-align: right; }
 
 /* 拖拽区域 */
 .drop-zone {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
   background-color: rgba(255, 255, 255, 0.9);
-  border: 3px dashed var(--border-color);
-  border-radius: var(--border-radius);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s, border-color 0.2s;
-  z-index: 10;
+  border: 3px dashed var(--border-color); border-radius: var(--border-radius);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; z-index: 10;
 }
 .drop-zone.hidden { display: none; }
 .drop-zone.dragover { background-color: rgba(0, 123, 255, 0.1); border-color: var(--primary-color); }
@@ -131,56 +178,37 @@ body {
 .drop-zone-prompt h2 { color: var(--text-color); margin: 1rem 0; }
 
 /* 右侧工具栏 */
+/* **FIX 2: 右侧工具栏已经是固定布局，无需改动** */
 .toolbar { padding: 1.5rem; }
 .toolbar-header {
-  text-align: center;
-  margin-bottom: 2rem;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 1rem;
+  text-align: center; margin-bottom: 2rem;
+  border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;
 }
 .toolbar-header h1 { font-size: 2rem; }
-.tool-section { margin-bottom: 1.5rem; } /* 减少一些边距 */
+.tool-section { margin-bottom: 1.5rem; }
 .tool-section h3 {
-  font-size: 1rem;
-  margin-bottom: 1rem;
-  color: var(--text-color-light);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  font-size: 1rem; margin-bottom: 1rem; color: var(--text-color-light);
+  text-transform: uppercase; letter-spacing: 1px;
 }
 .file-inputs, .button-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    display: flex; flex-direction: column; gap: 0.75rem;
 }
-/* **FIX 4: 为按钮组添加底部边距** */
-.button-group {
-    margin-bottom: 1rem; /* 增加组间距 */
-}
+.button-group { margin-bottom: 1rem; }
 .file-name { font-size: 0.875rem; color: var(--text-color-light); margin-top: 0.5rem; }
 .toolbar-footer {
-    margin-top: auto;
-    text-align: center;
-    font-size: 0.875rem;
-    color: var(--text-color-light);
-    padding-top: 1rem;
+    margin-top: auto; text-align: center; font-size: 0.875rem;
+    color: var(--text-color-light); padding-top: 1rem;
     border-top: 1px solid var(--border-color);
 }
 .toolbar-footer a { color: var(--primary-color); text-decoration: none; }
 
 /* 通用组件 */
 .btn {
-  display: inline-block;
-  font-weight: 600;
-  color: var(--surface-color);
-  text-align: center;
-  cursor: pointer;
-  background-color: transparent;
-  border: 1px solid transparent;
-  padding: 0.75rem 1.25rem;
-  font-size: 1rem;
-  border-radius: var(--border-radius);
-  transition: all 0.15s ease-in-out;
-  width: 100%;
+  display: inline-block; font-weight: 600; color: var(--surface-color);
+  text-align: center; cursor: pointer; background-color: transparent;
+  border: 1px solid transparent; padding: 0.75rem 1.25rem;
+  font-size: 1rem; border-radius: var(--border-radius);
+  transition: all 0.15s ease-in-out; width: 100%;
 }
 .btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); }
 .btn-primary:hover { background-color: var(--primary-hover-color); border-color: var(--primary-hover-color); }
