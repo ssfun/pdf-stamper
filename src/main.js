@@ -30,6 +30,7 @@ const sealInputElement = document.getElementById('sealInput');
 const dropZone = document.getElementById('drop-zone');
 const mainUploadBtn = document.getElementById('upload-pdf-btn-main');
 const sealUploadBtn = document.getElementById('upload-seal-btn');
+const sealNameElement = document.getElementById('seal-name');
 const thumbnailContainer = document.getElementById('thumbnail-container');
 const addSealBtn = document.getElementById('addSeal');
 const addStraddleBtn = document.getElementById('addStraddle');
@@ -39,9 +40,10 @@ const zoomSlider = document.getElementById('zoom-slider');
 const zoomValue = document.getElementById('zoom-value');
 const pageIndicator = document.getElementById('page-indicator');
 const pageSelector = document.getElementById('page-selector');
-// **FIX 3: 印章预览DOM**
+// **FIX 2: 获取印章预览DOM**
+const sealPreviewImage = document.getElementById('seal-preview');
 const sealPreviewPlaceholder = document.getElementById('seal-preview-placeholder');
-const sealPreviewImage = document.getElementById('seal-preview-image');
+
 
 // ---- 主程序入口 ----
 async function main() {
@@ -103,7 +105,7 @@ function initializeEventListeners() {
 // ---- UI 与导航函数 ----
 function applyZoom() {
     if (!pdfDoc) return;
-    zoomValue.textContent = `${Math.round(globalZoomMultiplier * 100)}% (Fit-Width)`;
+    zoomValue.textContent = `${Math.round(globalZoomMultiplier * 100)}%`;
     const canvas = fabricCanvases[currentActivePage - 1];
     if (canvas) {
         const fitScale = pageFitScales[currentActivePage - 1];
@@ -192,8 +194,7 @@ async function initializeFabricCanvasForPage(pageNum, forceRecalculate = false) 
     const originalWidth = highResViewport.width;
     const originalHeight = highResViewport.height;
 
-    // **FIX 1: 使用clientWidth精确计算可用宽度，不再硬编码减去padding**
-    const containerWidth = mainContent.clientWidth;
+    const containerWidth = mainContent.clientWidth - 40;
     const fitScale = containerWidth / originalWidth;
     pageFitScales[pageNum - 1] = fitScale;
 
@@ -237,15 +238,18 @@ function handleSealFile(file) {
     const reader = new FileReader();
     reader.onload = function(event) {
         const imageUrl = event.target.result;
+
+        // **FIX 2: 更新预览图**
+        sealPreviewImage.src = imageUrl;
+        sealPreviewImage.classList.remove('hidden');
+        sealPreviewPlaceholder.classList.add('hidden');
+
         sealImageElement = new Image();
         sealImageElement.src = imageUrl;
         sealImageElement.onload = () => {
             fabric.Image.fromURL(imageUrl, function(img) {
                 sealImage = img;
-                // **FIX 3: 更新预览图**
-                sealPreviewPlaceholder.style.display = 'none';
-                sealPreviewImage.src = imageUrl;
-                sealPreviewImage.style.display = 'block';
+                sealNameElement.textContent = file.name;
                 alert('印章已准备好。');
             });
         }
@@ -361,6 +365,7 @@ async function exportPDF() {
                 
                 let objLeft = obj.left;
                 let objTop = obj.top;
+
                 if (obj.originX === 'center') objLeft -= objWidth / 2;
                 if (obj.originY === 'center') objTop -= objHeight / 2;
                 
