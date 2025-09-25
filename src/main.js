@@ -14,8 +14,8 @@ function loadScript(src) {
 let pdfDoc = null;
 let originalPdfBytes = null;
 let fabricCanvases = [];
-let sealImage = null; 
-let sealImageElement = null; 
+let sealImage = null;
+let sealImageElement = null;
 let currentActivePage = 1;
 let totalPages = 0;
 let pageFitScales = [];
@@ -148,19 +148,25 @@ function updatePageNavigator() {
 function getRotatedCroppedImage(sourceImage, angle) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
+    
     const w = sourceImage.width;
     const h = sourceImage.height;
+    
     const diagonal = Math.sqrt(w * w + h * h);
     canvas.width = diagonal;
     canvas.height = diagonal;
+    
     ctx.translate(diagonal / 2, diagonal / 2);
     ctx.rotate(angle * Math.PI / 180);
     ctx.drawImage(sourceImage, -w / 2, -h / 2);
+    
     const finalCanvas = document.createElement('canvas');
     finalCanvas.width = w;
     finalCanvas.height = h;
     const finalCtx = finalCanvas.getContext('2d');
+    
     finalCtx.drawImage(canvas, (diagonal - w) / 2, (diagonal - h) / 2, w, h, 0, 0, w, h);
+    
     return finalCanvas.toDataURL();
 }
 
@@ -282,7 +288,7 @@ function handleSealFile(file) {
             alert('印章已准备好。');
         }
     };
-    reader.readAsArrayBuffer(file);
+    reader.readAsDataURL(file);
 }
 
 function addNormalSeal() {
@@ -335,19 +341,17 @@ async function addStraddleSeal() {
             
             fabric.Image.fromURL(tempPieceCanvas.toDataURL(), (imgPiece) => {
                 imgPiece.scale(initialScale);
-                const pieceScaledWidth = pieceWidth * initialScale;
+                const scaledFullWidth = sealImageElement.width * initialScale;
+                const scaledPieceWidth = pieceWidth * initialScale;
+
                 imgPiece.set({
-                    // ** 核心修复：精确定位到最右侧 **
-                    left: canvas.originalWidth - pieceScaledWidth,
-                    top: 400, 
-                    hasControls: true, 
-                    borderColor: '#007bff',
+                    // ** 核心修复：精确计算每个碎片的位置 **
+                    left: canvas.originalWidth - scaledFullWidth + (i * scaledPieceWidth),
+                    top: 400, hasControls: true, borderColor: '#007bff',
                     lockMovementX: true, 
                     lockRotation: true,
-                    straddleGroup: groupId, 
-                    pageIndex: i,
-                    originX: 'left', 
-                    originY: 'top', 
+                    straddleGroup: groupId, pageIndex: i,
+                    originX: 'left', originY: 'top', 
                     angle: 0
                 });
                 canvas.add(imgPiece);
