@@ -1,0 +1,251 @@
+/* 全局样式和变量 */
+:root {
+  --font-family-sans: "Inter", "Helvetica Neue", "Helvetica", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+  --primary-color: #007bff;
+  --primary-hover-color: #0056b3;
+  --secondary-color: #6c757d;
+  --secondary-hover-color: #5a6268;
+  --danger-color: #dc3545;
+  --danger-hover-color: #c82333;
+  --bg-color: #f8f9fa;
+  --surface-color: #ffffff;
+  --border-color: #dee2e6;
+  --text-color: #212529;
+  --text-color-light: #6c757d;
+  --border-radius: 8px;
+  --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* 基础重置 */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family-sans);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  overflow: hidden; /* 防止页面滚动 */
+}
+
+/* 主应用布局 */
+#app {
+  display: grid;
+  grid-template-columns: 280px 1fr 320px;
+  height: 100vh;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.sidebar, .main-content, .toolbar {
+  background-color: var(--surface-color);
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 左侧边栏 */
+.sidebar {
+  padding: 1rem;
+}
+
+.sidebar-header h2 {
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.thumbnail-container {
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+.thumbnail-container .empty-state {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color-light);
+}
+
+.thumbnail-item {
+  margin-bottom: 1rem;
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  transition: border-color 0.2s ease;
+  padding: 4px;
+}
+.thumbnail-item img {
+  width: 100%;
+  display: block;
+  border-radius: 2px;
+}
+.thumbnail-item.active {
+  border-color: var(--primary-color);
+}
+.thumbnail-item p {
+  text-align: center;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* 中间主工作区 */
+.main-content {
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start; /* 顶部对齐 */
+  padding: 2rem;
+  position: relative;
+}
+#canvas-container {
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+.drop-zone {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 3px dashed var(--border-color);
+  border-radius: var(--border-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, border-color 0.2s;
+  z-index: 10;
+}
+
+.drop-zone.hidden {
+    display: none;
+}
+
+.drop-zone.dragover {
+  background-color: rgba(0, 123, 255, 0.1);
+  border-color: var(--primary-color);
+}
+
+.drop-zone-prompt {
+  text-align: center;
+  color: var(--text-color-light);
+}
+.drop-zone-prompt h2 {
+    color: var(--text-color);
+    margin: 1rem 0;
+}
+
+
+/* 右侧工具栏 */
+.toolbar {
+  padding: 1.5rem;
+}
+.toolbar-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+}
+.toolbar-header h1 {
+    font-size: 2rem;
+}
+.tool-section {
+  margin-bottom: 2rem;
+}
+.tool-section h3 {
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  color: var(--text-color-light);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.file-inputs, .button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.file-name {
+    font-size: 0.875rem;
+    color: var(--text-color-light);
+    margin-top: 0.5rem;
+}
+
+.toolbar-footer {
+    margin-top: auto;
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--text-color-light);
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+.toolbar-footer a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+/* 通用组件样式 */
+.btn {
+  display: inline-block;
+  font-weight: 600;
+  color: var(--surface-color);
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  background-color: transparent;
+  border: 1px solid transparent;
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  border-radius: var(--border-radius);
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  width: 100%;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+.btn-primary:hover {
+  background-color: var(--primary-hover-color);
+  border-color: var(--primary-hover-color);
+}
+
+.btn-secondary {
+  background-color: var(--secondary-color);
+  border-color: var(--secondary-color);
+}
+.btn-secondary:hover {
+  background-color: var(--secondary-hover-color);
+  border-color: var(--secondary-hover-color);
+}
+
+.btn-danger {
+  background-color: var(--danger-color);
+  border-color: var(--danger-color);
+}
+.btn-danger:hover {
+  background-color: var(--danger-hover-color);
+  border-color: var(--danger-hover-color);
+}
+
+.btn-action {
+    background-color: var(--surface-color);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+}
+.btn-action:hover {
+    background-color: var(--primary-color);
+    color: var(--surface-color);
+}
+.btn-export {
+    font-size: 1.125rem;
+    padding: 1rem;
+}
+
+/* 隐藏 input[file] */
+[hidden] {
+  display: none !important;
+}
