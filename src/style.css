@@ -21,7 +21,6 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 /* 主应用布局 */
 #app {
   display: grid;
-  /* **FIX 2: 为开关按钮留出空间** */
   grid-template-columns: var(--sidebar-width) auto 1fr 320px;
   height: 100vh;
   gap: 1rem;
@@ -46,14 +45,12 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   padding: 1rem;
   overflow: hidden;
   transition: padding 0.3s ease-in-out, transform 0.3s ease-in-out;
-  position: relative;
 }
 #app.sidebar-collapsed .sidebar {
   padding-left: 0;
   padding-right: 0;
   transform: translateX(calc(-1 * var(--sidebar-width)));
 }
-
 .sidebar-header {
   display: flex;
   justify-content: space-between;
@@ -79,7 +76,6 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 .thumbnail-item.active { border-color: var(--primary-color); }
 .thumbnail-item p { text-align: center; margin-top: 0.5rem; font-size: 0.875rem; }
 
-/* **FIX 2: 开关按钮新样式** */
 .sidebar-toggle-btn {
   background-color: var(--surface-color);
   border: 1px solid var(--border-color);
@@ -92,7 +88,7 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   border-radius: 50%;
   transition: all 0.2s;
   z-index: 100;
-  margin-left: -1rem; /* 微调位置 */
+  margin-left: -1rem;
   margin-right: -1rem;
 }
 .sidebar-toggle-btn:hover { color: var(--text-color); }
@@ -112,10 +108,12 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   display: flex;
   padding: 2rem;
   background-color: var(--bg-color);
+  position: relative; /* **FIX 1: 关键修复，为拖拽区提供定位锚点** */
 }
-/* **FIX 1: 拖拽区域样式修正** */
+
+/* 拖拽区域 */
 .drop-zone {
-  display: none; /* 默认隐藏 */
+  display: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -125,11 +123,15 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   border-radius: var(--border-radius);
   transition: all 0.2s;
 }
+#app.no-pdf-loaded .main-content {
+  /* 当没有PDF时，让拖拽区充满工作区 */
+  padding: 0;
+}
 #app.no-pdf-loaded .drop-zone {
-  display: flex; /* 仅在初始状态下显示 */
+  display: flex;
 }
 .main-content.dragover .drop-zone {
-  display: flex; /* 拖拽时也显示 */
+  display: flex;
   position: absolute; top: 0; left: 0;
   background-color: rgba(0, 123, 255, 0.1);
   border-color: var(--primary-color);
@@ -138,7 +140,13 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 .drop-zone-prompt { text-align: center; color: var(--text-color-light); }
 .drop-zone-prompt h2 { color: var(--text-color); margin: 1rem 0; }
 
-#canvas-container { box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin: auto; }
+.canvas-wrapper {
+  margin: auto; /* 保证在可滚动区域内居中 */
+}
+
+.canvas-wrapper .canvas-container {
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
 
 /* 底部工具栏 */
 .main-content-footer {
