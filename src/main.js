@@ -14,8 +14,8 @@ function loadScript(src) {
 let pdfDoc = null;
 let originalPdfBytes = null;
 let fabricCanvases = [];
-let sealImage = null; // This will now store the pre-rotated Fabric image object
-let sealImageElement = null; // The original uploaded image element
+let sealImage = null; 
+let sealImageElement = null; 
 let currentActivePage = 1;
 let totalPages = 0;
 let pageFitScales = [];
@@ -145,34 +145,22 @@ function updatePageNavigator() {
 }
 
 // ---- 核心功能函数 ----
-
-// ** 核心修复：新的旋转和裁剪函数 **
 function getRotatedCroppedImage(sourceImage, angle) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    
     const w = sourceImage.width;
     const h = sourceImage.height;
-    
-    // 创建一个足够大的画布来容纳旋转后的图像
     const diagonal = Math.sqrt(w * w + h * h);
     canvas.width = diagonal;
     canvas.height = diagonal;
-    
-    // 将图像绘制到中心并旋转
     ctx.translate(diagonal / 2, diagonal / 2);
     ctx.rotate(angle * Math.PI / 180);
     ctx.drawImage(sourceImage, -w / 2, -h / 2);
-    
-    // 创建最终的画布，尺寸与原始图像相同
     const finalCanvas = document.createElement('canvas');
     finalCanvas.width = w;
     finalCanvas.height = h;
     const finalCtx = finalCanvas.getContext('2d');
-    
-    // 从大画布的中心裁剪出与原始图像等大的区域
     finalCtx.drawImage(canvas, (diagonal - w) / 2, (diagonal - h) / 2, w, h, 0, 0, w, h);
-    
     return finalCanvas.toDataURL();
 }
 
@@ -294,7 +282,7 @@ function handleSealFile(file) {
             alert('印章已准备好。');
         }
     };
-    reader.readAsDataURL(file);
+    reader.readAsArrayBuffer(file);
 }
 
 function addNormalSeal() {
@@ -302,7 +290,6 @@ function addNormalSeal() {
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
 
-    // **使用新函数获取预旋转的印章图像**
     const rotatedSealUrl = getRotatedCroppedImage(sealImageElement, sealRotation);
     
     fabric.Image.fromURL(rotatedSealUrl, (img) => {
@@ -313,7 +300,7 @@ function addNormalSeal() {
             cornerSize: 10, cornerStyle: 'circle', cornerColor: '#007bff',
             transparentCorners: false, borderColor: '#007bff',
             lockRotation: true,
-            angle: 0 // **角度为0，因为图像内容已旋转**
+            angle: 0
         });
         canvas.add(img);
         canvas.setActiveObject(img);
@@ -324,14 +311,12 @@ function addNormalSeal() {
 async function addStraddleSeal() {
     if (!sealImageElement || !pdfDoc) return;
     
-    // **先获取预旋转的完整印章**
     const rotatedSealUrl = getRotatedCroppedImage(sealImageElement, sealRotation);
     const rotatedSealImage = new Image();
     rotatedSealImage.src = rotatedSealUrl;
     
     rotatedSealImage.onload = async () => {
         const totalPages = pdfDoc.numPages;
-        // **使用原始（未旋转）尺寸进行切割计算**
         const pieceWidth = sealImageElement.width / totalPages;
         const groupId = `straddle-${Date.now()}`;
         
@@ -340,27 +325,30 @@ async function addStraddleSeal() {
             const canvas = await initializeFabricCanvasForPage(pageNum);
             if (!canvas) continue;
             
-            // **使用原始（未旋转）尺寸进行缩放计算**
             const initialScale = (canvas.originalWidth / 5) / sealImageElement.width;
             
             const tempPieceCanvas = document.createElement('canvas');
             tempPieceCanvas.width = pieceWidth;
-            tempPieceCanvas.height = sealImageElement.height; // 切割高度不变
+            tempPieceCanvas.height = sealImageElement.height;
             
-            // **从预旋转的完整印章图中切割**
             tempPieceCanvas.getContext('2d').drawImage(rotatedSealImage, i * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
             
             fabric.Image.fromURL(tempPieceCanvas.toDataURL(), (imgPiece) => {
                 imgPiece.scale(initialScale);
+                const pieceScaledWidth = pieceWidth * initialScale;
                 imgPiece.set({
-                    // **使用原始（未旋转）尺寸进行定位**
-                    left: canvas.originalWidth - (sealImageElement.width * initialScale),
-                    top: 400, hasControls: true, borderColor: '#007bff',
+                    // ** 核心修复：精确定位到最右侧 **
+                    left: canvas.originalWidth - pieceScaledWidth,
+                    top: 400, 
+                    hasControls: true, 
+                    borderColor: '#007bff',
                     lockMovementX: true, 
                     lockRotation: true,
-                    straddleGroup: groupId, pageIndex: i,
-                    originX: 'left', originY: 'top', 
-                    angle: 0 // **角度为0**
+                    straddleGroup: groupId, 
+                    pageIndex: i,
+                    originX: 'left', 
+                    originY: 'top', 
+                    angle: 0
                 });
                 canvas.add(imgPiece);
                 canvas.renderAll();
@@ -429,8 +417,6 @@ async function exportPDF() {
                 let objLeft = obj.left;
                 let objTop = obj.top;
 
-                // **因为所有对象都是 0 度角，坐标计算回归简化**
-                // 唯一的复杂性来自 origin (中心点 vs 左上角)
                 if (obj.originX === 'center') objLeft -= objWidth / 2;
                 if (obj.originY === 'center') objTop -= objHeight / 2;
                 
@@ -441,7 +427,7 @@ async function exportPDF() {
                     x: pdfX, y: pdfY,
                     width: (objWidth / canvas.originalWidth) * pageWidth,
                     height: (objHeight / canvas.originalHeight) * pageHeight,
-                    rotate: degrees(0), // **角度永远是0**
+                    rotate: degrees(0),
                 });
             }
         }
