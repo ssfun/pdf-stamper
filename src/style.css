@@ -33,7 +33,6 @@ body {
 /* 主应用布局 */
 #app {
   display: grid;
-  /* **FIX 2: 调整左侧边栏宽度** */
   grid-template-columns: 220px 1fr 320px;
   height: 100vh;
   gap: 1rem;
@@ -50,17 +49,9 @@ body {
 }
 
 /* 左侧边栏 */
-.sidebar {
-  padding: 1rem;
-}
-.sidebar-header h2 {
-  font-size: 1.25rem;
-  margin-bottom: 1rem;
-}
-.thumbnail-container {
-  overflow-y: auto;
-  flex-grow: 1;
-}
+.sidebar { padding: 1rem; }
+.sidebar-header h2 { font-size: 1.25rem; margin-bottom: 1rem; }
+.thumbnail-container { overflow-y: auto; flex-grow: 1; }
 .thumbnail-container .empty-state {
   height: 100%;
   display: flex;
@@ -76,48 +67,38 @@ body {
   border-radius: 4px;
   transition: border-color 0.2s ease;
   padding: 4px;
-  /* **FIX 2.1: 居中显示预览图** */
-  max-width: 150px; /* 限制最大宽度以保持比例 */
+  max-width: 150px;
   margin-left: auto;
   margin-right: auto;
 }
-.thumbnail-item img, .thumbnail-item canvas { /* 应用于canvas */
+.thumbnail-item canvas {
   width: 100%;
   display: block;
   border-radius: 2px;
 }
-.thumbnail-item.active {
-  border-color: var(--primary-color);
-}
-.thumbnail-item p {
-  text-align: center;
-  margin-top: 0.5rem;
-  font-size: 0.875rem;
-}
+.thumbnail-item.active { border-color: var(--primary-color); }
+.thumbnail-item p { text-align: center; margin-top: 0.5rem; font-size: 0.875rem; }
 
 /* 中间主工作区 */
-.main-content-wrapper {
-  padding: 0; /* 移除内边距，让滚动区域占满 */
-}
+.main-content-wrapper { padding: 0; }
 .main-content {
-  overflow: auto;
-  flex-grow: 1; /* 占据剩余空间 */
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  overflow: auto; /* **FIX 3: 确保可滚动** */
+  flex-grow: 1;
+  display: flex; /* 使用 flex 布局来居中 */
+  /* justify-content: center; 和 align-items: flex-start; 移动到 #canvas-container 的父级 */
   padding: 2rem;
-  position: relative;
-  background-color: var(--bg-color); /* 给滚动区域一个背景色 */
+  background-color: var(--bg-color);
 }
 #canvas-container {
   box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-  /* 确保画布缩放时，容器自身不移动 */
-  margin: auto; 
+  margin: auto; /* 在 flex 容器中实现真正的居中 */
+  /* transition 用于平滑缩放效果 */
+  transition: transform 0.1s ease-in-out;
 }
 
-/* 新增：底部工具栏样式 */
+/* 底部工具栏 */
 .main-content-footer {
-  flex-shrink: 0; /* 防止被压缩 */
+  flex-shrink: 0;
   padding: 0.75rem 1.5rem;
   border-top: 1px solid var(--border-color);
   display: flex;
@@ -125,16 +106,10 @@ body {
   gap: 0.75rem;
   font-size: 0.875rem;
 }
-#zoom-slider {
-  flex-grow: 1;
-  max-width: 200px;
-}
-#zoom-value {
-  font-weight: bold;
-  min-width: 45px; /* 防止文字跳动 */
-  text-align: right;
-}
+#zoom-slider { flex-grow: 1; max-width: 200px; }
+#zoom-value { font-weight: bold; min-width: 45px; text-align: right; }
 
+/* 拖拽区域 */
 .drop-zone {
   position: absolute;
   top: 0;
@@ -151,14 +126,8 @@ body {
   z-index: 10;
 }
 .drop-zone.hidden { display: none; }
-.drop-zone.dragover {
-  background-color: rgba(0, 123, 255, 0.1);
-  border-color: var(--primary-color);
-}
-.drop-zone-prompt {
-  text-align: center;
-  color: var(--text-color-light);
-}
+.drop-zone.dragover { background-color: rgba(0, 123, 255, 0.1); border-color: var(--primary-color); }
+.drop-zone-prompt { text-align: center; color: var(--text-color-light); }
 .drop-zone-prompt h2 { color: var(--text-color); margin: 1rem 0; }
 
 /* 右侧工具栏 */
@@ -170,7 +139,7 @@ body {
   padding-bottom: 1rem;
 }
 .toolbar-header h1 { font-size: 2rem; }
-.tool-section { margin-bottom: 2rem; }
+.tool-section { margin-bottom: 1.5rem; } /* 减少一些边距 */
 .tool-section h3 {
   font-size: 1rem;
   margin-bottom: 1rem;
@@ -183,11 +152,11 @@ body {
     flex-direction: column;
     gap: 0.75rem;
 }
-.file-name {
-    font-size: 0.875rem;
-    color: var(--text-color-light);
-    margin-top: 0.5rem;
+/* **FIX 4: 为按钮组添加底部边距** */
+.button-group {
+    margin-bottom: 1rem; /* 增加组间距 */
 }
+.file-name { font-size: 0.875rem; color: var(--text-color-light); margin-top: 0.5rem; }
 .toolbar-footer {
     margin-top: auto;
     text-align: center;
@@ -198,20 +167,19 @@ body {
 }
 .toolbar-footer a { color: var(--primary-color); text-decoration: none; }
 
-/* 通用组件样式 */
+/* 通用组件 */
 .btn {
   display: inline-block;
   font-weight: 600;
   color: var(--surface-color);
   text-align: center;
-  vertical-align: middle;
   cursor: pointer;
   background-color: transparent;
   border: 1px solid transparent;
   padding: 0.75rem 1.25rem;
   font-size: 1rem;
   border-radius: var(--border-radius);
-  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  transition: all 0.15s ease-in-out;
   width: 100%;
 }
 .btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); }
