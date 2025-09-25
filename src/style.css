@@ -13,7 +13,6 @@
   --text-color-light: #6c757d;
   --border-radius: 8px;
   --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  /* **FIX 1: 定义侧边栏宽度变量** */
   --sidebar-width: 220px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -22,16 +21,15 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 /* 主应用布局 */
 #app {
   display: grid;
-  /* **FIX 1 & 3: 使用CSS变量和calc()动态计算布局** */
-  grid-template-columns: var(--sidebar-width) 1fr 320px;
+  /* **FIX 2: 为开关按钮留出空间** */
+  grid-template-columns: var(--sidebar-width) auto 1fr 320px;
   height: 100vh;
   gap: 1rem;
   padding: 1rem;
-  transition: grid-template-columns 0.3s ease-in-out; /* 平滑过渡 */
+  transition: grid-template-columns 0.3s ease-in-out;
 }
-/* **FIX 1: 侧边栏收起时的布局** */
 #app.sidebar-collapsed {
-  grid-template-columns: 0px 1fr 320px;
+  grid-template-columns: 0px auto 1fr 320px;
 }
 
 .sidebar, .main-content-wrapper, .toolbar {
@@ -46,12 +44,10 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 /* 左侧边栏 */
 .sidebar {
   padding: 1rem;
-  /* **FIX 1: 控制溢出和过渡** */
   overflow: hidden;
   transition: padding 0.3s ease-in-out, transform 0.3s ease-in-out;
   position: relative;
 }
-/* **FIX 1: 侧边栏收起时的样式** */
 #app.sidebar-collapsed .sidebar {
   padding-left: 0;
   padding-right: 0;
@@ -65,7 +61,7 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   margin-bottom: 1rem;
   flex-shrink: 0;
 }
-.sidebar-header h2 { font-size: 1.25rem; }
+.sidebar-header h2 { font-size: 1.25rem; white-space: nowrap; }
 .thumbnail-container { overflow-y: auto; flex-grow: 1; }
 .thumbnail-container .empty-state {
   height: 100%;
@@ -74,52 +70,42 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   justify-content: center;
   color: var(--text-color-light);
 }
-
 .thumbnail-item {
-  margin-bottom: 1rem;
-  cursor: pointer;
-  border: 2px solid transparent;
-  border-radius: 4px;
-  transition: border-color 0.2s ease;
-  padding: 4px;
-  max-width: 150px;
-  margin-left: auto;
-  margin-right: auto;
+  margin-bottom: 1rem; cursor: pointer; border: 2px solid transparent;
+  border-radius: 4px; transition: border-color 0.2s ease;
+  padding: 4px; max-width: 150px; margin-left: auto; margin-right: auto;
 }
 .thumbnail-item canvas { width: 100%; display: block; border-radius: 2px; }
 .thumbnail-item.active { border-color: var(--primary-color); }
 .thumbnail-item p { text-align: center; margin-top: 0.5rem; font-size: 0.875rem; }
 
-/* **FIX 1: 侧边栏开关按钮样式** */
+/* **FIX 2: 开关按钮新样式** */
 .sidebar-toggle-btn {
-  background: none;
-  border: none;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--box-shadow);
+  width: 32px;
+  height: 32px;
   padding: 4px;
   cursor: pointer;
   color: var(--text-color-light);
-  border-radius: var(--border-radius);
-  transition: color 0.2s, background-color 0.2s;
-}
-.sidebar-toggle-btn:hover {
-  background-color: var(--bg-color);
-  color: var(--text-color);
-}
-#app.sidebar-collapsed .sidebar-toggle-btn {
-  /* 当收起时，让按钮“伸”出来 */
-  position: absolute;
-  top: 1rem;
-  right: -40px; /* 定位到侧边栏外部 */
-  background-color: var(--surface-color);
-  box-shadow: var(--box-shadow);
+  border-radius: 50%;
+  transition: all 0.2s;
   z-index: 100;
+  margin-left: -1rem; /* 微调位置 */
+  margin-right: -1rem;
 }
-/* 旋转图标 */
+.sidebar-toggle-btn:hover { color: var(--text-color); }
+#app.sidebar-collapsed .sidebar-toggle-btn {
+  transform: translateX(-16px);
+}
+.sidebar-toggle-btn svg { transition: transform 0.3s ease-in-out; }
 #app.sidebar-collapsed .sidebar-toggle-btn svg {
   transform: rotate(180deg);
 }
 
 /* 中间主工作区 */
-.main-content-wrapper { padding: 0; }
+.main-content-wrapper { padding: 0; position: relative; }
 .main-content {
   overflow: auto;
   flex-grow: 1;
@@ -127,58 +113,51 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   padding: 2rem;
   background-color: var(--bg-color);
 }
-#canvas-container {
-  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-  margin: auto;
-  transition: transform 0.1s ease-in-out;
+/* **FIX 1: 拖拽区域样式修正** */
+.drop-zone {
+  display: none; /* 默认隐藏 */
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border: 3px dashed var(--border-color);
+  border-radius: var(--border-radius);
+  transition: all 0.2s;
 }
+#app.no-pdf-loaded .drop-zone {
+  display: flex; /* 仅在初始状态下显示 */
+}
+.main-content.dragover .drop-zone {
+  display: flex; /* 拖拽时也显示 */
+  position: absolute; top: 0; left: 0;
+  background-color: rgba(0, 123, 255, 0.1);
+  border-color: var(--primary-color);
+  z-index: 10;
+}
+.drop-zone-prompt { text-align: center; color: var(--text-color-light); }
+.drop-zone-prompt h2 { color: var(--text-color); margin: 1rem 0; }
+
+#canvas-container { box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin: auto; }
 
 /* 底部工具栏 */
 .main-content-footer {
-  flex-shrink: 0;
-  padding: 0.75rem 1.5rem;
+  flex-shrink: 0; padding: 0.75rem 1.5rem;
   border-top: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: space-between; /* 两端对齐 */
-  gap: 1.5rem;
-  font-size: 0.875rem;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1.5rem; font-size: 0.875rem;
 }
-.zoom-controls, .page-navigator {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-/* **FIX 4: 页面导航样式** */
-#page-indicator {
-  font-weight: bold;
-  min-width: 80px;
-}
+.zoom-controls, .page-navigator { display: flex; align-items: center; gap: 0.75rem; }
+#page-indicator { font-weight: bold; min-width: 80px; }
 .page-selector {
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 8px; border-radius: 4px;
   border: 1px solid var(--border-color);
   background-color: var(--surface-color);
 }
 #zoom-slider { flex-grow: 1; max-width: 200px; }
-#zoom-value { font-weight: bold; min-width: 45px; text-align: right; }
-
-/* 拖拽区域 */
-.drop-zone {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  background-color: rgba(255, 255, 255, 0.9);
-  border: 3px dashed var(--border-color); border-radius: var(--border-radius);
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.2s; z-index: 10;
-}
-.drop-zone.hidden { display: none; }
-.drop-zone.dragover { background-color: rgba(0, 123, 255, 0.1); border-color: var(--primary-color); }
-.drop-zone-prompt { text-align: center; color: var(--text-color-light); }
-.drop-zone-prompt h2 { color: var(--text-color); margin: 1rem 0; }
+#zoom-value { font-weight: bold; min-width: 100px; text-align: right; }
 
 /* 右侧工具栏 */
-/* **FIX 2: 右侧工具栏已经是固定布局，无需改动** */
 .toolbar { padding: 1.5rem; }
 .toolbar-header {
   text-align: center; margin-bottom: 2rem;
@@ -190,9 +169,7 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   font-size: 1rem; margin-bottom: 1rem; color: var(--text-color-light);
   text-transform: uppercase; letter-spacing: 1px;
 }
-.file-inputs, .button-group {
-    display: flex; flex-direction: column; gap: 0.75rem;
-}
+.file-inputs, .button-group { display: flex; flex-direction: column; gap: 0.75rem; }
 .button-group { margin-bottom: 1rem; }
 .file-name { font-size: 0.875rem; color: var(--text-color-light); margin-top: 0.5rem; }
 .toolbar-footer {
