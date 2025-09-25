@@ -144,7 +144,6 @@ function updatePageNavigator() {
     pageSelector.value = currentActivePage;
 }
 
-
 // ---- 核心功能函数 ----
 async function handlePdfFile(file) {
     appContainer.classList.remove('no-pdf-loaded');
@@ -266,7 +265,7 @@ function handleSealFile(file) {
             });
         }
     };
-    reader.readAsDataURL(file);
+    reader.readAsArrayBuffer(file);
 }
 
 function addNormalSeal() {
@@ -289,75 +288,72 @@ function addNormalSeal() {
     });
 }
 
-// ** 核心修复：重写骑缝章函数 **
+// ** 核心修复：重写骑缝章添加逻辑 **
 async function addStraddleSeal() {
     if (!sealImageElement || !pdfDoc) return;
+    
     const totalPages = pdfDoc.numPages;
-    const pieceWidth = sealImageElement.width / totalPages;
     const groupId = `straddle-${Date.now()}`;
     
-    const rotatedSealCanvas = document.createElement('canvas');
-    const ctx = rotatedSealCanvas.getContext('2d');
-    const diagonal = Math.hypot(sealImageElement.width, sealImageElement.height);
-    rotatedSealCanvas.width = diagonal;
-    rotatedSealCanvas.height = diagonal;
-    ctx.translate(diagonal / 2, diagonal / 2);
-    ctx.rotate(sealRotation * Math.PI / 180);
-    ctx.drawImage(sealImageElement, -sealImageElement.width / 2, -sealImageElement.height / 2);
-    
-    const fullRotatedImage = new Image();
-    fullRotatedImage.src = rotatedSealCanvas.toDataURL();
-    
-    fullRotatedImage.onload = async () => {
-        for (let i = 0; i < totalPages; i++) {
-            const pageNum = i + 1;
-            const canvas = await initializeFabricCanvasForPage(pageNum);
-            if (!canvas) continue;
+    // 创建一个应用了旋转和缩放的完整印章对象
+    const rotatedSeal = await new Promise(resolve => {
+        sealImage.clone(cloned => {
+            cloned.set({ angle: sealRotation, originX: 'center', originY: 'center' });
+            resolve(cloned);
+        });
+    });
 
-            const initialScale = (canvas.originalWidth / 5) / sealImageElement.width;
-            
-            const tempPieceCanvas = document.createElement('canvas');
-            // 按比例计算切割后的尺寸
-            const rotatedWidth = fullRotatedImage.width;
-            const rotatedHeight = fullRotatedImage.height;
-            const sliceWidth = pieceWidth * (rotatedWidth / sealImageElement.width);
-            
-            tempPieceCanvas.width = sliceWidth;
-            tempPieceCanvas.height = rotatedHeight;
+    for (let i = 0; i < totalPages; i++) {
+        const pageNum = i + 1;
+        const canvas = await initializeFabricCanvasForPage(pageNum);
+        if (!canvas) continue;
 
-            const sx = i * sliceWidth;
+        const initialScale = (canvas.originalWidth / 5) / rotatedSeal.getScaledWidth();
+        rotatedSeal.scale(initialScale);
+        
+        const pieceWidth = rotatedSeal.getScaledWidth() / totalPages;
+        const pieceHeight = rotatedSeal.getScaledHeight();
 
-            tempPieceCanvas.getContext('2d').drawImage(fullRotatedImage, sx, 0, sliceWidth, rotatedHeight, 0, 0, sliceWidth, rotatedHeight);
+        // 使用 clipPath 来精确切割旋转后的图像
+        const clipRect = new fabric.Rect({
+            left: i * pieceWidth,
+            top: 0,
+            width: pieceWidth,
+            height: pieceHeight,
+            absolutePositioned: true
+        });
 
-            fabric.Image.fromURL(tempPieceCanvas.toDataURL(), (imgPiece) => {
-                imgPiece.scale(initialScale);
-                imgPiece.set({
-                    left: canvas.originalWidth - (rotatedWidth * initialScale) + (i * sliceWidth * initialScale),
-                    top: 400,
-                    hasControls: true, borderColor: '#007bff',
-                    lockMovementX: true, 
-                    lockRotation: true,
-                    straddleGroup: groupId,
-                    pageIndex: i,
-                    originX: 'left', originY: 'top', 
-                });
-                canvas.add(imgPiece);
-                canvas.renderAll();
-                
-                const syncObjects = (target) => {
-                    fabricCanvases.forEach((c) => {
-                        if (!c) return;
-                        c.getObjects().filter(obj => obj.straddleGroup === groupId && obj !== target)
-                         .forEach(obj => {
-                             obj.set({ top: target.top, scaleX: target.scaleX, scaleY: target.scaleY }).setCoords();
-                             c.renderAll();
-                        });
-                    });
-                };
-                imgPiece.on('moving', () => syncObjects(imgPiece));
-                imgPiece.on('scaling', () => syncObjects(imgPiece));
+        rotatedSeal.clone(clonedPiece => {
+            clonedPiece.set({
+                clipPath: clipRect,
+                left: canvas.originalWidth - rotatedSeal.getScaledWidth() + (i * pieceWidth),
+                top: 400,
+                hasControls: true,
+                borderColor: '#007bff',
+                lockMovementX: true,
+                lockRotation: true,
+                straddleGroup: groupId,
+                pageIndex: i,
+                originX: 'left',
+                originY: 'top',
             });
-        }
+
+            canvas.add(clonedPiece);
+            canvas.renderAll();
+            
+            const syncObjects = (target) => {
+                fabricCanvases.forEach((c) => {
+                    if (!c) return;
+                    c.getObjects().filter(obj => obj.straddleGroup === groupId && obj !== target)
+                     .forEach(obj => {
+                         obj.set({ top: target.top, scaleX: target.scaleX, scaleY: target.scaleY }).setCoords();
+                         c.renderAll();
+                    });
+                });
+            };
+            clonedPiece.on('moving', () => syncObjects(clonedPiece));
+            clonedPiece.on('scaling', () => syncObjects(clonedPiece));
+        });
     }
 }
 
@@ -381,6 +377,7 @@ function deleteSelectedObject() {
     }
 }
 
+// ** 核心修复：重写导出坐标计算 **
 async function exportPDF() {
     if (!originalPdfBytes) return alert('请先上传PDF文件！');
     const exportButton = document.getElementById('exportPDF');
@@ -397,30 +394,25 @@ async function exportPDF() {
             
             const objects = canvas.getObjects().filter(obj => !obj.isBackgroundImage);
             for (const obj of objects) {
-                // ** 核心修复：使用 aCoords 获取绝对坐标 **
-                const aCoords = obj.aCoords;
-                if (!aCoords) continue;
-                const { tl } = aCoords; // Top-Left corner
-
-                const multiplier = 2.5; // 提高导出分辨率
+                const multiplier = 2;
                 const imgDataUrl = obj.toDataURL({ format: 'png', multiplier });
                 const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
                 const pngImage = await pdfDoc.embedPng(pngImageBytes);
                 
+                // 使用 aCoords 获取物体旋转后精确的左上角坐标
+                const aCoords = obj.aCoords;
+                const topLeft = aCoords.tl;
+
                 const objWidth = obj.getScaledWidth();
                 const objHeight = obj.getScaledHeight();
                 
-                const pdfX = (tl.x / canvas.originalWidth) * pageWidth;
-                const pdfY = pageHeight - ((tl.y + objHeight) / canvas.originalHeight) * pageHeight;
-                // 注意：因为 aCoords 已经包含了旋转后的位置，所以 pdf-lib 中绘制时，宽度和高度也要相应地映射
-                const pdfWidth = (objWidth / canvas.originalWidth) * pageWidth;
-                const pdfHeight = (objHeight / canvas.originalHeight) * pageHeight;
+                const pdfX = (topLeft.x / canvas.originalWidth) * pageWidth;
+                const pdfY = pageHeight - ((topLeft.y + objHeight) / canvas.originalHeight) * pageHeight;
 
                 page.drawImage(pngImage, {
-                    x: pdfX, 
-                    y: pdfY,
-                    width: pdfWidth,
-                    height: pdfHeight,
+                    x: pdfX, y: pdfY,
+                    width: (objWidth / canvas.originalWidth) * pageWidth,
+                    height: (objHeight / canvas.originalHeight) * pageHeight,
                     rotate: degrees(-obj.angle),
                 });
             }
