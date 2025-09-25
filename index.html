@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF Stamper - 现代化PDF盖章工具</title>
+    <meta
+      name="description"
+      content="PDF Stamper - 免费在线PDF盖章工具，拥有现代化UI和交互体验，支持普通印章和骑缝章，所有操作均在本地完成，保护您的隐私安全。"
+    />
+    <meta
+      name="keywords"
+      content="PDF Stamper,PDF盖章,电子印章,骑缝章,在线工具,PDF处理,免费盖章,现代化UI"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <h2>页面预览</h2>
+        </div>
+        <div class="thumbnail-container" id="thumbnail-container">
+          <div class="empty-state">
+             <p>请先上传PDF文件</p>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-content" id="main-content">
+        <div id="canvas-container">
+            </div>
+        <div id="drop-zone" class="drop-zone">
+            <div class="drop-zone-prompt">
+                <img src="/drag-drop-icon.svg" alt="拖拽上传" width="80">
+                <h2>将 PDF 文件拖拽到此处</h2>
+                <p>或</p>
+                <button class="btn btn-primary" id="upload-pdf-btn-main">选择文件</button>
+                <input type="file" id="pdfInput" accept=".pdf" hidden />
+            </div>
+        </div>
+      </main>
+
+      <aside class="toolbar" id="toolbar">
+        <div class="toolbar-header">
+          <h1>PDF Stamper</h1>
+          <p>免费在线PDF盖章工具</p>
+        </div>
+
+        <div class="tool-section">
+          <h3>第一步：选择文件</h3>
+          <div class="file-inputs">
+            <button class="btn btn-secondary" id="upload-seal-btn">选择印章图片</button>
+            <input type="file" id="sealInput" accept="image/*" hidden />
+            <span id="seal-name" class="file-name">未选择印章</span>
+          </div>
+        </div>
+
+        <div class="tool-section">
+          <h3>第二步：添加印章</h3>
+          <div class="button-group">
+            <button id="addSeal" class="btn btn-action">添加普通章</button>
+            <button id="addStraddle" class="btn btn-action">添加骑缝章</button>
+          </div>
+           <div class="button-group">
+            <button id="deleteSeal" class="btn btn-danger">删除选中印章</button>
+          </div>
+        </div>
+        
+        <div class="tool-section">
+            <h3>第三步：导出文件</h3>
+            <button id="exportPDF" class="btn btn-primary btn-export">导出为 PDF</button>
+        </div>
+
+        <div class="toolbar-footer">
+          <p>所有操作均在本地完成，无数据上传。</p>
+        </div>
+      </aside>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
