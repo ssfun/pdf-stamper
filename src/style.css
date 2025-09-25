@@ -27,19 +27,20 @@ body {
   font-family: var(--font-family-sans);
   background-color: var(--bg-color);
   color: var(--text-color);
-  overflow: hidden; /* 防止页面滚动 */
+  overflow: hidden;
 }
 
 /* 主应用布局 */
 #app {
   display: grid;
-  grid-template-columns: 280px 1fr 320px;
+  /* **FIX 2: 调整左侧边栏宽度** */
+  grid-template-columns: 220px 1fr 320px;
   height: 100vh;
   gap: 1rem;
   padding: 1rem;
 }
 
-.sidebar, .main-content, .toolbar {
+.sidebar, .main-content-wrapper, .toolbar {
   background-color: var(--surface-color);
   border-radius: var(--border-radius);
   box-shadow: var(--box-shadow);
@@ -52,17 +53,14 @@ body {
 .sidebar {
   padding: 1rem;
 }
-
 .sidebar-header h2 {
   font-size: 1.25rem;
   margin-bottom: 1rem;
 }
-
 .thumbnail-container {
   overflow-y: auto;
   flex-grow: 1;
 }
-
 .thumbnail-container .empty-state {
   height: 100%;
   display: flex;
@@ -78,8 +76,12 @@ body {
   border-radius: 4px;
   transition: border-color 0.2s ease;
   padding: 4px;
+  /* **FIX 2.1: 居中显示预览图** */
+  max-width: 150px; /* 限制最大宽度以保持比例 */
+  margin-left: auto;
+  margin-right: auto;
 }
-.thumbnail-item img {
+.thumbnail-item img, .thumbnail-item canvas { /* 应用于canvas */
   width: 100%;
   display: block;
   border-radius: 2px;
@@ -94,17 +96,45 @@ body {
 }
 
 /* 中间主工作区 */
+.main-content-wrapper {
+  padding: 0; /* 移除内边距，让滚动区域占满 */
+}
 .main-content {
   overflow: auto;
+  flex-grow: 1; /* 占据剩余空间 */
   display: flex;
   justify-content: center;
-  align-items: flex-start; /* 顶部对齐 */
+  align-items: flex-start;
   padding: 2rem;
   position: relative;
+  background-color: var(--bg-color); /* 给滚动区域一个背景色 */
 }
 #canvas-container {
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  /* 确保画布缩放时，容器自身不移动 */
+  margin: auto; 
 }
+
+/* 新增：底部工具栏样式 */
+.main-content-footer {
+  flex-shrink: 0; /* 防止被压缩 */
+  padding: 0.75rem 1.5rem;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+#zoom-slider {
+  flex-grow: 1;
+  max-width: 200px;
+}
+#zoom-value {
+  font-weight: bold;
+  min-width: 45px; /* 防止文字跳动 */
+  text-align: right;
+}
+
 .drop-zone {
   position: absolute;
   top: 0;
@@ -120,42 +150,27 @@ body {
   transition: background-color 0.2s, border-color 0.2s;
   z-index: 10;
 }
-
-.drop-zone.hidden {
-    display: none;
-}
-
+.drop-zone.hidden { display: none; }
 .drop-zone.dragover {
   background-color: rgba(0, 123, 255, 0.1);
   border-color: var(--primary-color);
 }
-
 .drop-zone-prompt {
   text-align: center;
   color: var(--text-color-light);
 }
-.drop-zone-prompt h2 {
-    color: var(--text-color);
-    margin: 1rem 0;
-}
-
+.drop-zone-prompt h2 { color: var(--text-color); margin: 1rem 0; }
 
 /* 右侧工具栏 */
-.toolbar {
-  padding: 1.5rem;
-}
+.toolbar { padding: 1.5rem; }
 .toolbar-header {
   text-align: center;
   margin-bottom: 2rem;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 1rem;
 }
-.toolbar-header h1 {
-    font-size: 2rem;
-}
-.tool-section {
-  margin-bottom: 2rem;
-}
+.toolbar-header h1 { font-size: 2rem; }
+.tool-section { margin-bottom: 2rem; }
 .tool-section h3 {
   font-size: 1rem;
   margin-bottom: 1rem;
@@ -173,7 +188,6 @@ body {
     color: var(--text-color-light);
     margin-top: 0.5rem;
 }
-
 .toolbar-footer {
     margin-top: auto;
     text-align: center;
@@ -182,10 +196,7 @@ body {
     padding-top: 1rem;
     border-top: 1px solid var(--border-color);
 }
-.toolbar-footer a {
-    color: var(--primary-color);
-    text-decoration: none;
-}
+.toolbar-footer a { color: var(--primary-color); text-decoration: none; }
 
 /* 通用组件样式 */
 .btn {
@@ -203,49 +214,13 @@ body {
   transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
   width: 100%;
 }
-
-.btn-primary {
-  background-color: var(--primary-color);
-  border-color: var(--primary-color);
-}
-.btn-primary:hover {
-  background-color: var(--primary-hover-color);
-  border-color: var(--primary-hover-color);
-}
-
-.btn-secondary {
-  background-color: var(--secondary-color);
-  border-color: var(--secondary-color);
-}
-.btn-secondary:hover {
-  background-color: var(--secondary-hover-color);
-  border-color: var(--secondary-hover-color);
-}
-
-.btn-danger {
-  background-color: var(--danger-color);
-  border-color: var(--danger-color);
-}
-.btn-danger:hover {
-  background-color: var(--danger-hover-color);
-  border-color: var(--danger-hover-color);
-}
-
-.btn-action {
-    background-color: var(--surface-color);
-    color: var(--primary-color);
-    border: 1px solid var(--primary-color);
-}
-.btn-action:hover {
-    background-color: var(--primary-color);
-    color: var(--surface-color);
-}
-.btn-export {
-    font-size: 1.125rem;
-    padding: 1rem;
-}
-
-/* 隐藏 input[file] */
-[hidden] {
-  display: none !important;
-}
+.btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); }
+.btn-primary:hover { background-color: var(--primary-hover-color); border-color: var(--primary-hover-color); }
+.btn-secondary { background-color: var(--secondary-color); border-color: var(--secondary-color); }
+.btn-secondary:hover { background-color: var(--secondary-hover-color); border-color: var(--secondary-hover-color); }
+.btn-danger { background-color: var(--danger-color); border-color: var(--danger-color); }
+.btn-danger:hover { background-color: var(--danger-hover-color); border-color: var(--danger-hover-color); }
+.btn-action { background-color: var(--surface-color); color: var(--primary-color); border: 1px solid var(--primary-color); }
+.btn-action:hover { background-color: var(--primary-color); color: var(--surface-color); }
+.btn-export { font-size: 1.125rem; padding: 1rem; }
+[hidden] { display: none !important; }
