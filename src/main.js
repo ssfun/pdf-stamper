@@ -150,7 +150,8 @@ async function showPage(pageNum) {
 
     if (!fabricCanvases[pageNum - 1]) {
         const page = await pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
+        // **提高渲染分辨率**
+        const viewport = page.getViewport({ scale: 2.0 }); 
         const canvas = document.getElementById(`canvas-${pageNum}`);
         canvas.height = viewport.height;
         canvas.width = viewport.width;
@@ -190,7 +191,7 @@ function addNormalSeal() {
     if (!canvas) return;
 
     sealImage.clone((cloned) => {
-        cloned.scaleToWidth(canvas.width / 8);
+        cloned.scaleToWidth(canvas.width / 5); // 适当调整初始大小
         cloned.set({
             left: (canvas.width - cloned.getScaledWidth()) / 2,
             top: (canvas.height - cloned.getScaledHeight()) / 2,
@@ -212,7 +213,7 @@ function addStraddleSeal() {
 
     const totalPages = pdfDoc.numPages;
     const pieceWidth = sealImageElement.width / totalPages;
-    const initialScale = (fabricCanvases[0].width / 8) / sealImageElement.width;
+    const initialScale = (fabricCanvases[0].width / 5) / sealImageElement.width;
     const groupId = `straddle-${Date.now()}`;
 
     fabricCanvases.forEach((canvas, index) => {
@@ -225,8 +226,7 @@ function addStraddleSeal() {
             imgPiece.scale(initialScale);
             imgPiece.set({
                 left: canvas.width - (pieceWidth * initialScale),
-                top: 200,
-                // **FIX 1: 启用控制点**
+                top: 400, // 调整初始Y坐标
                 hasControls: true, 
                 borderColor: '#007bff',
                 straddleGroup: groupId,
@@ -235,7 +235,6 @@ function addStraddleSeal() {
             canvas.add(imgPiece);
             canvas.renderAll();
             
-            // **FIX 1.1: 添加同步事件监听**
             const syncObjects = (target) => {
                 fabricCanvases.forEach(c => {
                     c.getObjects().forEach(obj => {
@@ -262,7 +261,6 @@ function addStraddleSeal() {
 function deleteSelectedObject() {
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
-
     const activeObject = canvas.getActiveObject();
     if (activeObject) {
         if (confirm('确定要删除选中的印章吗？')) {
@@ -281,7 +279,7 @@ function deleteSelectedObject() {
     }
 }
 
-// **FIX 2: 重构导出逻辑**
+// **FIX: 恢复高质量导出逻辑**
 async function exportPDF() {
     if (!originalPdfBytes) return alert('请先上传一个PDF文件！');
 
@@ -291,32 +289,41 @@ async function exportPDF() {
     exportButton.disabled = true;
 
     try {
-        const { PDFDocument } = window.PDFLib;
+        const { PDFDocument, degrees } = window.PDFLib;
         const pdfDoc = await PDFDocument.load(originalPdfBytes);
         const pages = pdfDoc.getPages();
 
         for (let i = 0; i < pages.length; i++) {
             const canvas = fabricCanvases[i];
-            if (!canvas) {
-                // 如果某一页没有被渲染过，确保它仍然被包含在最终PDF中
-                continue;
-            }
+            // 只有当页面被渲染过（即可能有印章）时才处理
+            if (!canvas) continue; 
 
-            // 将整个Fabric Canvas导出为一张图片
-            const dataUrl = canvas.toDataURL({ format: 'png', quality: 1.0 });
-            const imageBytes = await fetch(dataUrl).then(res => res.arrayBuffer());
-            const pngImage = await pdfDoc.embedPng(imageBytes);
-            
             const page = pages[i];
-            const { width, height } = page.getSize();
+            const { width: pageWidth, height: pageHeight } = page.getSize();
             
-            // 将图片绘制到PDF页面上，完全覆盖
-            page.drawImage(pngImage, {
-                x: 0,
-                y: 0,
-                width: width,
-                height: height,
-            });
+            // 只获取印章对象，背景图不是object
+            const objects = canvas.getObjects();
+
+            for (const obj of objects) {
+                const imgDataUrl = obj.toDataURL({ format: 'png' });
+                const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
+                const pngImage = await pdfDoc.embedPng(pngImageBytes);
+
+                const objWidth = obj.getScaledWidth();
+                const objHeight = obj.getScaledHeight();
+                
+                // 坐标转换：将 Fabric.js 的左上角原点坐标 转换为 PDF-Lib 的左下角原点坐标
+                const pdfX = (obj.left / canvas.width) * pageWidth;
+                const pdfY = pageHeight - ((obj.top + objHeight) / canvas.height) * pageHeight;
+
+                page.drawImage(pngImage, {
+                    x: pdfX,
+                    y: pdfY,
+                    width: (objWidth / canvas.width) * pageWidth,
+                    height: (objHeight / canvas.height) * pageHeight,
+                    rotate: degrees(-obj.angle),
+                });
+            }
         }
 
         const pdfBytes = await pdfDoc.save();
@@ -336,6 +343,7 @@ async function exportPDF() {
         exportButton.disabled = false;
     }
 }
+
 
 // 启动应用
 main();
