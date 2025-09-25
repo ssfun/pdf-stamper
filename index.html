@@ -5,14 +5,6 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PDF Stamper - 现代化PDF盖章工具</title>
-    <meta
-      name="description"
-      content="PDF Stamper - 免费在线PDF盖章工具，拥有现代化UI和交互体验，支持普通印章和骑缝章，所有操作均在本地完成，保护您的隐私安全。"
-    />
-    <meta
-      name="keywords"
-      content="PDF Stamper,PDF盖章,电子印章,骑缝章,在线工具,PDF处理,免费盖章,现代化UI"
-    />
   </head>
   <body>
     <div id="app" class="sidebar-visible no-pdf-loaded">
@@ -65,10 +57,11 @@
           <div class="file-inputs">
             <button class="btn btn-secondary" id="upload-seal-btn">选择印章图片</button>
             <input type="file" id="sealInput" accept="image/*" hidden />
-            <div id="seal-preview-container" class="seal-preview">
-              <span id="seal-preview-placeholder">印章预览</span>
-              <img id="seal-preview-image" src="#" alt="印章预览图" style="display: none;" />
+            <div class="seal-preview-container">
+              <img id="seal-preview" src="" alt="印章预览" class="seal-preview-image hidden">
+              <span id="seal-preview-placeholder" class="seal-preview-placeholder">印章预览</span>
             </div>
+            <span id="seal-name" class="file-name">未选择印章</span>
           </div>
         </div>
         <div class="tool-section">
