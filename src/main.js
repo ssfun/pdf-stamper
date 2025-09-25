@@ -17,11 +17,13 @@ let fabricCanvases = [];
 let sealImage = null;
 let sealImageElement = null;
 let currentActivePage = 1;
+let totalPages = 0;
 let originalCanvasDimensions = []; 
-// **FIX 2: 新增全局缩放变量**
 let globalZoom = 1.0; 
 
 // ---- DOM 元素获取 ----
+const appContainer = document.getElementById('app');
+const sidebarToggleBtn = document.getElementById('sidebar-toggle');
 const pdfInputElement = document.getElementById('pdfInput');
 const sealInputElement = document.getElementById('sealInput');
 const dropZone = document.getElementById('drop-zone');
@@ -36,6 +38,9 @@ const deleteSealBtn = document.getElementById('deleteSeal');
 const exportPdfBtn = document.getElementById('exportPDF');
 const zoomSlider = document.getElementById('zoom-slider');
 const zoomValue = document.getElementById('zoom-value');
+// **FIX 4: 新增页码导航DOM**
+const pageIndicator = document.getElementById('page-indicator');
+const pageSelector = document.getElementById('page-selector');
 
 
 // ---- 主程序入口 ----
@@ -52,6 +57,11 @@ async function main() {
 
 // ---- 事件监听初始化 ----
 function initializeEventListeners() {
+    // **FIX 1: 侧边栏开关事件**
+    sidebarToggleBtn.addEventListener('click', () => {
+        appContainer.classList.toggle('sidebar-collapsed');
+    });
+
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', (e) => {
@@ -70,10 +80,17 @@ function initializeEventListeners() {
     deleteSealBtn.addEventListener('click', deleteSelectedObject);
     addStraddleBtn.addEventListener('click', addStraddleSeal);
     exportPdfBtn.addEventListener('click', exportPDF);
+    
+    // **FIX 4: 页码选择器事件**
+    pageSelector.addEventListener('change', (e) => {
+        const newPage = parseInt(e.target.value, 10);
+        if (newPage !== currentActivePage) {
+            showPage(newPage);
+        }
+    });
 
-    // **FIX 2: 更新缩放事件监听器**
     zoomSlider.addEventListener('input', (e) => {
-        globalZoom = parseFloat(e.target.value); // 更新全局变量
+        globalZoom = parseFloat(e.target.value);
         zoomValue.textContent = `${Math.round(globalZoom * 100)}%`;
         const canvas = fabricCanvases[currentActivePage - 1];
         if (canvas) {
@@ -93,10 +110,27 @@ function initializeEventListeners() {
     });
 }
 
-// ---- 功能函数 ----
+// ---- 导航与UI更新函数 ----
+// **FIX 4: 新增函数，用于更新页码导航**
+function updatePageNavigator() {
+    pageIndicator.textContent = `第 ${currentActivePage} / ${totalPages} 页`;
+    
+    // 重新生成下拉选项
+    pageSelector.innerHTML = '';
+    for (let i = 1; i <= totalPages; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `第 ${i} 页`;
+        pageSelector.appendChild(option);
+    }
+    // 设置当前选中的项
+    pageSelector.value = currentActivePage;
+}
+
+
+// ---- 核心功能函数 ----
 
 async function handlePdfFile(file) {
-    // ... (此函数无变化)
     dropZone.classList.add('hidden');
     thumbnailContainer.innerHTML = '<p style="padding: 20px; text-align: center;">正在渲染页面...</p>';
     canvasContainer.innerHTML = '';
@@ -106,8 +140,9 @@ async function handlePdfFile(file) {
         originalPdfBytes = typedarray;
         try {
             pdfDoc = await pdfjsLib.getDocument({ data: typedarray }).promise;
-            fabricCanvases = new Array(pdfDoc.numPages).fill(null);
-            originalCanvasDimensions = new Array(pdfDoc.numPages).fill(null);
+            totalPages = pdfDoc.numPages; // 更新总页数
+            fabricCanvases = new Array(totalPages).fill(null);
+            originalCanvasDimensions = new Array(totalPages).fill(null);
             await renderAllPages();
         } catch (error) {
             console.error('加载PDF失败:', error);
@@ -119,10 +154,9 @@ async function handlePdfFile(file) {
 }
 
 async function renderAllPages() {
-    // ... (此函数无变化)
     thumbnailContainer.innerHTML = '';
     currentActivePage = 1;
-    for (let i = 1; i <= pdfDoc.numPages; i++) {
+    for (let i = 1; i <= totalPages; i++) {
         const thumbItem = document.createElement('div');
         thumbItem.className = 'thumbnail-item';
         thumbItem.dataset.pageNumber = i;
@@ -150,7 +184,6 @@ async function renderAllPages() {
 }
 
 async function initializeFabricCanvasForPage(pageNum) {
-    // ... (此函数无变化)
     if (fabricCanvases[pageNum - 1]) return fabricCanvases[pageNum - 1];
     const page = await pdfDoc.getPage(pageNum);
     const viewport = page.getViewport({ scale: 2.0 });
@@ -181,10 +214,7 @@ async function showPage(pageNum) {
     if (activeThumb) activeThumb.classList.add('active');
     const wrapper = document.getElementById(`page-wrapper-${pageNum}`);
     wrapper.style.display = 'block';
-    
     const canvas = await initializeFabricCanvasForPage(pageNum);
-    
-    // **FIX 2: 应用全局缩放**
     if (canvas) {
         const dimensions = originalCanvasDimensions[pageNum - 1];
         canvas.setZoom(globalZoom);
@@ -192,13 +222,13 @@ async function showPage(pageNum) {
         canvas.setHeight(dimensions.height * globalZoom);
         canvas.renderAll();
     }
-    // 更新滑块和数值以匹配全局状态
     zoomSlider.value = globalZoom;
     zoomValue.textContent = `${Math.round(globalZoom * 100)}%`;
+    // 更新页码导航
+    updatePageNavigator();
 }
 
 function handleSealFile(file) {
-    // ... (此函数无变化)
     const reader = new FileReader();
     reader.onload = function(event) {
         sealImageElement = new Image();
@@ -215,7 +245,6 @@ function handleSealFile(file) {
 }
 
 function addNormalSeal() {
-    // ... (此函数无变化)
     if (!sealImage) return alert('请先选择印章图片！');
     if (!pdfDoc) return alert('请先上传PDF文件！');
     const canvas = fabricCanvases[currentActivePage - 1];
@@ -225,13 +254,9 @@ function addNormalSeal() {
         cloned.set({
             left: originalCanvasDimensions[currentActivePage - 1].width / 2,
             top: originalCanvasDimensions[currentActivePage - 1].height / 2,
-            originX: 'center',
-            originY: 'center',
-            cornerSize: 10,
-            cornerStyle: 'circle',
-            cornerColor: '#007bff',
-            transparentCorners: false,
-            borderColor: '#007bff',
+            originX: 'center', originY: 'center',
+            cornerSize: 10, cornerStyle: 'circle', cornerColor: '#007bff',
+            transparentCorners: false, borderColor: '#007bff',
         });
         canvas.add(cloned);
         canvas.setActiveObject(cloned);
@@ -257,15 +282,13 @@ async function addStraddleSeal() {
         tempCanvas.height = sealImageElement.height;
         tempCanvas.getContext('2d').drawImage(sealImageElement, i * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
         (function(currentCanvas, currentIndex) {
-            fabric.Image.fromURL(tempCanvas.toDataURL(), (imgPiece) => {
+            fabric.Image.fromURL(tempCanvas.to-dataurl(), (imgPiece) => {
                 const originalDims = originalCanvasDimensions[currentIndex];
                 imgPiece.scale(initialScale);
                 imgPiece.set({
-                    // **FIX 1: 基于原始尺寸定位，不再受缩放影响**
                     left: originalDims.width - (pieceWidth * initialScale),
                     top: 400,
-                    hasControls: true,
-                    borderColor: '#007bff',
+                    hasControls: true, borderColor: '#007bff',
                     lockMovementX: true, 
                     straddleGroup: groupId,
                     pageIndex: currentIndex
@@ -278,10 +301,8 @@ async function addStraddleSeal() {
                         c.getObjects().forEach(obj => {
                             if (obj.straddleGroup === groupId && obj !== target) {
                                 obj.set({
-                                    top: target.top,
-                                    scaleX: target.scaleX,
-                                    scaleY: target.scaleY,
-                                    angle: target.angle
+                                    top: target.top, scaleX: target.scaleX,
+                                    scaleY: target.scaleY, angle: target.angle
                                 }).setCoords();
                             }
                         });
@@ -297,14 +318,13 @@ async function addStraddleSeal() {
 }
 
 function deleteSelectedObject() {
-    // ... (此函数无变化)
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
     const activeObject = canvas.getActiveObject();
     if (activeObject) {
         if (confirm('确定要删除选中的印章吗？')) {
             if (activeObject.straddleGroup) {
-                const groupId = activeObject.straddleGroup;
+                const groupId = active-object.straddleGroup;
                 fabricCanvases.forEach(c => {
                     if (!c) return;
                     const objectsToDelete = c.getObjects().filter(obj => obj.straddleGroup === groupId);
@@ -320,7 +340,6 @@ function deleteSelectedObject() {
 }
 
 async function exportPDF() {
-    // ... (此函数无变化)
     if (!originalPdfBytes) return alert('请先上传一个PDF文件！');
     const exportButton = document.getElementById('exportPDF');
     const originalText = exportButton.textContent;
@@ -340,7 +359,7 @@ async function exportPDF() {
             for (const obj of objects) {
                 if (obj.isBackgroundImage) continue;
                 const multiplier = 2;
-                const imgDataUrl = obj.toDataURL({ format: 'png', multiplier: multiplier });
+                const imgDataUrl = obj.to-dataurl({ format: 'png', multiplier: multiplier });
                 const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
                 const pngImage = await pdfDoc.embedPng(pngImageBytes);
                 const objWidth = obj.getScaledWidth();
@@ -348,8 +367,7 @@ async function exportPDF() {
                 const pdfX = (obj.left / originalDims.width) * pageWidth;
                 const pdfY = pageHeight - ((obj.top + objHeight) / originalDims.height) * pageHeight;
                 page.drawImage(pngImage, {
-                    x: pdfX,
-                    y: pdfY,
+                    x: pdfX, y: pdfY,
                     width: (objWidth / originalDims.width) * pageWidth,
                     height: (objHeight / originalDims.height) * pageHeight,
                     rotate: degrees(-obj.angle),
