@@ -30,7 +30,6 @@ const sealInputElement = document.getElementById('sealInput');
 const dropZone = document.getElementById('drop-zone');
 const mainUploadBtn = document.getElementById('upload-pdf-btn-main');
 const sealUploadBtn = document.getElementById('upload-seal-btn');
-const sealNameElement = document.getElementById('seal-name');
 const thumbnailContainer = document.getElementById('thumbnail-container');
 const addSealBtn = document.getElementById('addSeal');
 const addStraddleBtn = document.getElementById('addStraddle');
@@ -40,6 +39,9 @@ const zoomSlider = document.getElementById('zoom-slider');
 const zoomValue = document.getElementById('zoom-value');
 const pageIndicator = document.getElementById('page-indicator');
 const pageSelector = document.getElementById('page-selector');
+// **FIX 3: 印章预览DOM**
+const sealPreviewPlaceholder = document.getElementById('seal-preview-placeholder');
+const sealPreviewImage = document.getElementById('seal-preview-image');
 
 // ---- 主程序入口 ----
 async function main() {
@@ -190,7 +192,8 @@ async function initializeFabricCanvasForPage(pageNum, forceRecalculate = false) 
     const originalWidth = highResViewport.width;
     const originalHeight = highResViewport.height;
 
-    const containerWidth = mainContent.clientWidth - 40;
+    // **FIX 1: 使用clientWidth精确计算可用宽度，不再硬编码减去padding**
+    const containerWidth = mainContent.clientWidth;
     const fitScale = containerWidth / originalWidth;
     pageFitScales[pageNum - 1] = fitScale;
 
@@ -233,12 +236,16 @@ async function showPage(pageNum, forceRecalculate = false) {
 function handleSealFile(file) {
     const reader = new FileReader();
     reader.onload = function(event) {
+        const imageUrl = event.target.result;
         sealImageElement = new Image();
-        sealImageElement.src = event.target.result;
+        sealImageElement.src = imageUrl;
         sealImageElement.onload = () => {
-            fabric.Image.fromURL(event.target.result, function(img) {
+            fabric.Image.fromURL(imageUrl, function(img) {
                 sealImage = img;
-                sealNameElement.textContent = file.name;
+                // **FIX 3: 更新预览图**
+                sealPreviewPlaceholder.style.display = 'none';
+                sealPreviewImage.src = imageUrl;
+                sealPreviewImage.style.display = 'block';
                 alert('印章已准备好。');
             });
         }
@@ -287,7 +294,6 @@ async function addStraddleSeal() {
                 left: canvas.originalWidth - (pieceWidth * initialScale),
                 top: 400, hasControls: true, borderColor: '#007bff',
                 lockMovementX: true, straddleGroup: groupId, pageIndex: i,
-                // **确保骑缝章也是中心定位**
                 originX: 'left', originY: 'top', 
             });
             canvas.add(imgPiece);
@@ -353,17 +359,10 @@ async function exportPDF() {
                 const objWidth = obj.getScaledWidth();
                 const objHeight = obj.getScaledHeight();
                 
-                // ** 核心修复：根据对象的 origin 来计算其左上角坐标 **
                 let objLeft = obj.left;
                 let objTop = obj.top;
-
-                if (obj.originX === 'center') {
-                    objLeft -= objWidth / 2;
-                }
-                if (obj.originY === 'center') {
-                    objTop -= objHeight / 2;
-                }
-                // (对于 originX/Y 为 'left'/'top' 的对象，此计算无影响，保持正确)
+                if (obj.originX === 'center') objLeft -= objWidth / 2;
+                if (obj.originY === 'center') objTop -= objHeight / 2;
                 
                 const pdfX = (objLeft / canvas.originalWidth) * pageWidth;
                 const pdfY = pageHeight - ((objTop + objHeight) / canvas.originalHeight) * pageHeight;
@@ -388,7 +387,7 @@ async function exportPDF() {
         console.error('导出PDF时发生错误:', error);
         alert('导出失败，详情请查看控制台。');
     } finally {
-        exportButton.textContent = '导出为 PDF';
+        exportButton.textContent = '导出盖章 PDF';
         exportButton.disabled = false;
     }
 }
