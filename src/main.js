@@ -20,6 +20,7 @@ let currentActivePage = 1;
 let totalPages = 0;
 let pageFitScales = [];
 let globalZoomMultiplier = 1.0;
+let sealRotation = 0; // **新增：存储印章预设旋转角度**
 
 // ---- DOM 元素获取 ----
 const appContainer = document.getElementById('app');
@@ -41,6 +42,9 @@ const zoomSlider = document.getElementById('zoom-slider');
 const zoomValue = document.getElementById('zoom-value');
 const pageIndicator = document.getElementById('page-indicator');
 const pageSelector = document.getElementById('page-selector');
+// **新增：旋转控制器DOM**
+const rotationSlider = document.getElementById('rotation-slider');
+const rotationInput = document.getElementById('rotation-input');
 
 // ---- 主程序入口 ----
 async function main() {
@@ -57,9 +61,7 @@ async function main() {
 function initializeEventListeners() {
     sidebarToggleBtn.addEventListener('click', () => {
         appContainer.classList.toggle('sidebar-collapsed');
-        setTimeout(() => {
-            if(pdfDoc) showPage(currentActivePage, true);
-        }, 300);
+        setTimeout(() => { if(pdfDoc) showPage(currentActivePage, true); }, 300);
     });
     
     mainContent.addEventListener('dragover', (e) => { e.preventDefault(); mainContent.classList.add('dragover'); });
@@ -91,6 +93,22 @@ function initializeEventListeners() {
         applyZoom();
     });
 
+    // **新增：旋转控制器事件监听**
+    rotationSlider.addEventListener('input', (e) => {
+        const angle = parseInt(e.target.value, 10);
+        rotationInput.value = angle;
+        sealRotation = angle;
+        sealPreviewImg.style.transform = `rotate(${angle}deg)`;
+    });
+    rotationInput.addEventListener('input', (e) => {
+        const angle = parseInt(e.target.value, 10);
+        if(!isNaN(angle) && angle >= -180 && angle <= 180) {
+            rotationSlider.value = angle;
+            sealRotation = angle;
+            sealPreviewImg.style.transform = `rotate(${angle}deg)`;
+        }
+    });
+
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Delete' || e.key === 'Backspace') {
             e.preventDefault();
@@ -100,6 +118,7 @@ function initializeEventListeners() {
 }
 
 // ---- UI 与导航函数 ----
+// ... (applyZoom, updatePageNavigator 无变化)
 function applyZoom() {
     if (!pdfDoc) return;
     zoomValue.textContent = `${Math.round(globalZoomMultiplier * 100)}% (Fit-Width)`;
@@ -127,6 +146,7 @@ function updatePageNavigator() {
     }
     pageSelector.value = currentActivePage;
 }
+
 
 // ---- 核心功能函数 ----
 async function handlePdfFile(file) {
@@ -263,6 +283,9 @@ function addNormalSeal() {
             originX: 'center', originY: 'center',
             cornerSize: 10, cornerStyle: 'circle', cornerColor: '#007bff',
             transparentCorners: false, borderColor: '#007bff',
+            // **应用预设角度并锁定旋转**
+            angle: sealRotation,
+            lockRotation: true,
         });
         canvas.add(cloned);
         canvas.setActiveObject(cloned);
@@ -270,93 +293,72 @@ function addNormalSeal() {
     });
 }
 
-// ** 核心修复：重写骑缝章相关函数 **
-// 函数1: 动态重绘整个骑缝章组
-function redrawStraddleGroup(target) {
-    const { straddleGroup: groupId, scaleX, scaleY, angle, top } = target;
-
-    // 1. 创建一个足够大的离屏画布
-    const offscreenCanvas = document.createElement('canvas');
-    const ctx = offscreenCanvas.getContext('2d');
-    const diagonal = Math.hypot(sealImageElement.width, sealImageElement.height);
-    offscreenCanvas.width = diagonal * scaleX;
-    offscreenCanvas.height = diagonal * scaleX; // Use scaleX for proportional scaling
-    const center = offscreenCanvas.width / 2;
-
-    // 2. 将变换后的完整印章绘制到离屏画布中心
-    ctx.translate(center, center);
-    ctx.rotate(angle * Math.PI / 180);
-    ctx.scale(scaleX, scaleX); // Use scaleX for proportional scaling
-    ctx.drawImage(sealImageElement, -sealImageElement.width / 2, -sealImageElement.height / 2);
-
-    // 3. 遍历所有页面，更新每个碎片的图像
-    const pieceWidth = (sealImageElement.width * scaleX) / totalPages;
-    fabricCanvases.forEach((canvas, index) => {
-        if (!canvas) return;
-        const piece = canvas.getObjects().find(obj => obj.straddleGroup === groupId);
-        if (!piece) return;
-
-        // 4. 从离屏画布中裁剪出正确的区域
-        const tempPieceCanvas = document.createElement('canvas');
-        const scaledPieceWidth = piece.width * piece.scaleX;
-        tempPieceCanvas.width = scaledPieceWidth;
-        tempPieceCanvas.height = offscreenCanvas.height;
-        const tempCtx = tempPieceCanvas.getContext('2d');
-
-        const sx = center - (sealImageElement.width * scaleX / 2) + (index * pieceWidth);
-        tempCtx.drawImage(offscreenCanvas, sx, 0, pieceWidth, offscreenCanvas.height, 0, 0, scaledPieceWidth, offscreenCanvas.height);
-
-        // 5. 更新 Fabric 对象的图像内容
-        const newImg = new Image();
-        newImg.src = tempPieceCanvas.toDataURL();
-        newImg.onload = () => {
-            piece.setElement(newImg);
-            piece.set({
-                top: top,
-                angle: 0, // 角度已烘焙到图片里
-            }).setCoords();
-            canvas.renderAll();
-        };
-    });
-}
-
-// 函数2: 添加骑缝章的入口
 async function addStraddleSeal() {
     if (!sealImageElement || !pdfDoc) return;
     const totalPages = pdfDoc.numPages;
     const pieceWidth = sealImageElement.width / totalPages;
     const groupId = `straddle-${Date.now()}`;
     
-    for (let i = 0; i < totalPages; i++) {
-        const pageNum = i + 1;
-        const canvas = await initializeFabricCanvasForPage(pageNum);
-        if (!canvas) continue;
-        const initialScale = (canvas.originalWidth / 5) / sealImageElement.width;
-        
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = pieceWidth;
-        tempCanvas.height = sealImageElement.height;
-        tempCanvas.getContext('2d').drawImage(sealImageElement, i * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
-        
-        fabric.Image.fromURL(tempCanvas.toDataURL(), (imgPiece) => {
-            imgPiece.scale(initialScale);
-            imgPiece.set({
-                left: canvas.originalWidth - (canvas.originalWidth / 5), // Simplified positioning
-                top: 400, hasControls: true, borderColor: '#007bff',
-                lockMovementX: true, straddleGroup: groupId, pageIndex: i,
-                originX: 'left', originY: 'top', 
+    // **先将完整印章按预设角度旋转**
+    const rotatedSealCanvas = document.createElement('canvas');
+    const ctx = rotatedSealCanvas.getContext('2d');
+    const diagonal = Math.sqrt(sealImageElement.width ** 2 + sealImageElement.height ** 2);
+    rotatedSealCanvas.width = diagonal;
+    rotatedSealCanvas.height = diagonal;
+    ctx.translate(diagonal / 2, diagonal / 2);
+    ctx.rotate(sealRotation * Math.PI / 180);
+    ctx.drawImage(sealImageElement, -sealImageElement.width / 2, -sealImageElement.height / 2);
+    const rotatedSealImage = new Image();
+    rotatedSealImage.src = rotatedSealCanvas.toDataURL();
+    
+    rotatedSealImage.onload = async () => {
+        for (let i = 0; i < totalPages; i++) {
+            const pageNum = i + 1;
+            const canvas = await initializeFabricCanvasForPage(pageNum);
+            if (!canvas) continue;
+            const initialScale = (canvas.originalWidth / 5) / rotatedSealImage.width;
+            
+            const tempPieceCanvas = document.createElement('canvas');
+            const pieceHeight = rotatedSealImage.height;
+            tempPieceCanvas.width = pieceWidth;
+            tempPieceCanvas.height = pieceHeight;
+            // 从旋转后的完整印章图中切割
+            const sx = (diagonal - sealImageElement.width) / 2 + (i * pieceWidth);
+            const sy = (diagonal - sealImageElement.height) / 2;
+            tempPieceCanvas.getContext('2d').drawImage(rotatedSealImage, sx, sy, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, pieceHeight);
+            
+            fabric.Image.fromURL(tempPieceCanvas.toDataURL(), (imgPiece) => {
+                imgPiece.scale(initialScale);
+                imgPiece.set({
+                    left: canvas.originalWidth - (rotatedSealImage.width * initialScale),
+                    top: 400, hasControls: true, borderColor: '#007bff',
+                    lockMovementX: true, 
+                    lockRotation: true, // **锁定旋转**
+                    straddleGroup: groupId, pageIndex: i,
+                    originX: 'left', originY: 'top', 
+                });
+                canvas.add(imgPiece);
+                canvas.renderAll();
+                
+                const syncObjects = (target) => {
+                    fabricCanvases.forEach((c) => {
+                        if (!c) return;
+                        c.getObjects().filter(obj => obj.straddleGroup === groupId && obj !== target)
+                         .forEach(obj => {
+                             obj.set({ top: target.top, scaleX: target.scaleX, scaleY: target.scaleY }).setCoords();
+                             c.renderAll();
+                        });
+                    });
+                };
+                imgPiece.on('moving', () => syncObjects(imgPiece));
+                imgPiece.on('scaling', () => syncObjects(imgPiece));
             });
-            canvas.add(imgPiece);
-            canvas.renderAll();
-
-            // 操作结束后，触发重绘
-            imgPiece.on('modified', (e) => redrawStraddleGroup(e.target));
-        });
+        }
     }
 }
 
-
 function deleteSelectedObject() {
+    // ... (此函数无变化)
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
     const activeObject = canvas.getActiveObject();
@@ -376,6 +378,7 @@ function deleteSelectedObject() {
 }
 
 async function exportPDF() {
+    // ... (此函数无变化)
     if (!originalPdfBytes) return alert('请先上传PDF文件！');
     const exportButton = document.getElementById('exportPDF');
     exportButton.textContent = '导出中...'; exportButton.disabled = true;
