@@ -90,6 +90,8 @@ async function handlePdfFile(file) {
         originalPdfBytes = typedarray;
         try {
             pdfDoc = await pdfjsLib.getDocument({ data: typedarray }).promise;
+            // 初始化 fabricCanvases 数组，用 null 填充
+            fabricCanvases = new Array(pdfDoc.numPages).fill(null);
             await renderAllPages();
         } catch (error) {
             console.error('加载PDF失败:', error);
@@ -102,7 +104,6 @@ async function handlePdfFile(file) {
 
 async function renderAllPages() {
     thumbnailContainer.innerHTML = '';
-    fabricCanvases = [];
     currentActivePage = 1;
 
     for (let i = 1; i <= pdfDoc.numPages; i++) {
@@ -135,6 +136,38 @@ async function renderAllPages() {
     await showPage(1);
 }
 
+// **FIX: 抽离出独立的画布初始化函数**
+async function initializeFabricCanvasForPage(pageNum) {
+    // 如果画布已存在，直接返回
+    if (fabricCanvases[pageNum - 1]) {
+        return fabricCanvases[pageNum - 1];
+    }
+
+    const page = await pdfDoc.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 2.0 });
+    const canvas = document.getElementById(`canvas-${pageNum}`);
+    
+    if (!canvas) {
+      console.error(`无法找到 page ${pageNum} 的 canvas 元素`);
+      return null;
+    }
+
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = viewport.width;
+    tempCanvas.height = viewport.height;
+    await page.render({ canvasContext: tempCanvas.getContext('2d'), viewport }).promise;
+
+    const fabricCanvas = new fabric.Canvas(canvas);
+    fabricCanvas.setBackgroundImage(new fabric.Image(tempCanvas), fabricCanvas.renderAll.bind(fabricCanvas));
+    // 将初始化好的画布存入数组
+    fabricCanvases[pageNum - 1] = fabricCanvas;
+    return fabricCanvas;
+}
+
+
 async function showPage(pageNum) {
     if (!pdfDoc) return;
     currentActivePage = pageNum;
@@ -148,23 +181,8 @@ async function showPage(pageNum) {
     const wrapper = document.getElementById(`page-wrapper-${pageNum}`);
     wrapper.style.display = 'block';
 
-    if (!fabricCanvases[pageNum - 1]) {
-        const page = await pdfDoc.getPage(pageNum);
-        // **提高渲染分辨率**
-        const viewport = page.getViewport({ scale: 2.0 }); 
-        const canvas = document.getElementById(`canvas-${pageNum}`);
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = viewport.width;
-        tempCanvas.height = viewport.height;
-        await page.render({ canvasContext: tempCanvas.getContext('2d'), viewport }).promise;
-
-        const fabricCanvas = new fabric.Canvas(canvas);
-        fabricCanvas.setBackgroundImage(new fabric.Image(tempCanvas), fabricCanvas.renderAll.bind(fabricCanvas));
-        fabricCanvases[pageNum - 1] = fabricCanvas;
-    }
+    // 调用独立的初始化函数
+    await initializeFabricCanvasForPage(pageNum);
 }
 
 function handleSealFile(file) {
@@ -185,13 +203,13 @@ function handleSealFile(file) {
 
 function addNormalSeal() {
     if (!sealImage) return alert('请先选择印章图片！');
-    if (fabricCanvases.length === 0) return alert('请先上传PDF文件！');
+    if (!pdfDoc) return alert('请先上传PDF文件！');
 
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
 
     sealImage.clone((cloned) => {
-        cloned.scaleToWidth(canvas.width / 5); // 适当调整初始大小
+        cloned.scaleToWidth(canvas.width / 5);
         cloned.set({
             left: (canvas.width - cloned.getScaledWidth()) / 2,
             top: (canvas.height - cloned.getScaledHeight()) / 2,
@@ -207,56 +225,71 @@ function addNormalSeal() {
     });
 }
 
-function addStraddleSeal() {
+// **FIX: 改造骑缝章函数，确保所有画布都已初始化**
+async function addStraddleSeal() {
     if (!sealImageElement) return alert('请先选择印章图片！');
-    if (fabricCanvases.length === 0) return alert('请先上传PDF文件！');
+    if (!pdfDoc) return alert('请先上传PDF文件！');
 
     const totalPages = pdfDoc.numPages;
     const pieceWidth = sealImageElement.width / totalPages;
-    const initialScale = (fabricCanvases[0].width / 5) / sealImageElement.width;
     const groupId = `straddle-${Date.now()}`;
+    
+    // 先初始化一个参考画布，用于计算缩放比例
+    const refCanvas = await initializeFabricCanvasForPage(1);
+    if (!refCanvas) return; // 初始化失败则中止
+    const initialScale = (refCanvas.width / 5) / sealImageElement.width;
 
-    fabricCanvases.forEach((canvas, index) => {
+    // 循环所有页面，确保每一页的画布都存在，然后再添加印章
+    for (let i = 0; i < totalPages; i++) {
+        const pageNum = i + 1;
+        const canvas = await initializeFabricCanvasForPage(pageNum);
+        if (!canvas) continue; // 如果某个画布初始化失败，跳过
+
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = pieceWidth;
         tempCanvas.height = sealImageElement.height;
-        tempCanvas.getContext('2d').drawImage(sealImageElement, index * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
+        tempCanvas.getContext('2d').drawImage(sealImageElement, i * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
 
-        fabric.Image.fromURL(tempCanvas.toDataURL(), (imgPiece) => {
-            imgPiece.scale(initialScale);
-            imgPiece.set({
-                left: canvas.width - (pieceWidth * initialScale),
-                top: 400, // 调整初始Y坐标
-                hasControls: true, 
-                borderColor: '#007bff',
-                straddleGroup: groupId,
-                pageIndex: index
-            });
-            canvas.add(imgPiece);
-            canvas.renderAll();
-            
-            const syncObjects = (target) => {
-                fabricCanvases.forEach(c => {
-                    c.getObjects().forEach(obj => {
-                        if (obj.straddleGroup === groupId && obj !== target) {
-                            obj.set({
-                                top: target.top,
-                                scaleX: target.scaleX,
-                                scaleY: target.scaleY,
-                                angle: target.angle
-                            }).setCoords();
-                        }
-                    });
-                    c.renderAll();
+        // 使用闭包来捕获正确的 canvas 和 index
+        (function(currentCanvas, currentIndex) {
+            fabric.Image.fromURL(tempCanvas.toDataURL(), (imgPiece) => {
+                imgPiece.scale(initialScale);
+                imgPiece.set({
+                    left: currentCanvas.width - (pieceWidth * initialScale),
+                    top: 400,
+                    hasControls: true,
+                    borderColor: '#007bff',
+                    straddleGroup: groupId,
+                    pageIndex: currentIndex
                 });
-            };
-            
-            imgPiece.on('moving', () => syncObjects(imgPiece));
-            imgPiece.on('scaling', () => syncObjects(imgPiece));
-            imgPiece.on('rotating', () => syncObjects(imgPiece));
-        });
-    });
+                currentCanvas.add(imgPiece);
+                currentCanvas.renderAll();
+                
+                const syncObjects = (target) => {
+                    fabricCanvases.forEach(c => {
+                        if (!c) return;
+                        c.getObjects().forEach(obj => {
+                            if (obj.straddleGroup === groupId && obj !== target) {
+                                obj.set({
+                                    top: target.top,
+                                    scaleX: target.scaleX,
+                                    scaleY: target.scaleY,
+                                    angle: target.angle
+                                }).setCoords();
+                            }
+                        });
+                        c.renderAll();
+                    });
+                };
+                
+                imgPiece.on('moving', () => syncObjects(imgPiece));
+                imgPiece.on('scaling', () => syncObjects(imgPiece));
+                imgPiece.on('rotating', () => syncObjects(imgPiece));
+            });
+        })(canvas, i);
+    }
 }
+
 
 function deleteSelectedObject() {
     const canvas = fabricCanvases[currentActivePage - 1];
@@ -267,6 +300,7 @@ function deleteSelectedObject() {
             if (activeObject.straddleGroup) {
                 const groupId = activeObject.straddleGroup;
                 fabricCanvases.forEach(c => {
+                    if (!c) return;
                     const objectsToDelete = c.getObjects().filter(obj => obj.straddleGroup === groupId);
                     objectsToDelete.forEach(obj => c.remove(obj));
                     c.renderAll();
@@ -279,7 +313,6 @@ function deleteSelectedObject() {
     }
 }
 
-// **FIX: 恢复高质量导出逻辑**
 async function exportPDF() {
     if (!originalPdfBytes) return alert('请先上传一个PDF文件！');
 
@@ -295,16 +328,16 @@ async function exportPDF() {
 
         for (let i = 0; i < pages.length; i++) {
             const canvas = fabricCanvases[i];
-            // 只有当页面被渲染过（即可能有印章）时才处理
             if (!canvas) continue; 
 
             const page = pages[i];
             const { width: pageWidth, height: pageHeight } = page.getSize();
             
-            // 只获取印章对象，背景图不是object
             const objects = canvas.getObjects();
-
             for (const obj of objects) {
+                // 跳过背景图
+                if (obj.isBackgroundImage) continue;
+
                 const imgDataUrl = obj.toDataURL({ format: 'png' });
                 const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
                 const pngImage = await pdfDoc.embedPng(pngImageBytes);
@@ -312,7 +345,6 @@ async function exportPDF() {
                 const objWidth = obj.getScaledWidth();
                 const objHeight = obj.getScaledHeight();
                 
-                // 坐标转换：将 Fabric.js 的左上角原点坐标 转换为 PDF-Lib 的左下角原点坐标
                 const pdfX = (obj.left / canvas.width) * pageWidth;
                 const pdfY = pageHeight - ((obj.top + objHeight) / canvas.height) * pageHeight;
 
