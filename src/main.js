@@ -30,7 +30,6 @@ const sealInputElement = document.getElementById('sealInput');
 const dropZone = document.getElementById('drop-zone');
 const mainUploadBtn = document.getElementById('upload-pdf-btn-main');
 const sealUploadBtn = document.getElementById('upload-seal-btn');
-// **FIX 2: 新增印章预览DOM**
 const sealPreviewImg = document.getElementById('seal-preview');
 const sealPlaceholder = document.getElementById('seal-placeholder');
 const thumbnailContainer = document.getElementById('thumbnail-container');
@@ -103,7 +102,7 @@ function initializeEventListeners() {
 // ---- UI 与导航函数 ----
 function applyZoom() {
     if (!pdfDoc) return;
-    zoomValue.textContent = `${Math.round(globalZoomMultiplier * 100)}% (Fit-Width)`;
+    zoomValue.textContent = `${Math.round(globalZoomMultiplier * 90)}% (Fit-Width)`;
     const canvas = fabricCanvases[currentActivePage - 1];
     if (canvas) {
         const fitScale = pageFitScales[currentActivePage - 1];
@@ -232,7 +231,6 @@ async function showPage(pageNum, forceRecalculate = false) {
     updatePageNavigator();
 }
 
-// **FIX 2: 更新函数以显示预览图**
 function handleSealFile(file) {
     const reader = new FileReader();
     reader.onload = function(event) {
@@ -240,7 +238,6 @@ function handleSealFile(file) {
         sealImageElement = new Image();
         sealImageElement.src = imageUrl;
 
-        // 更新预览图
         sealPreviewImg.src = imageUrl;
         sealPreviewImg.classList.remove('hidden');
         sealPlaceholder.classList.add('hidden');
@@ -273,6 +270,60 @@ function addNormalSeal() {
     });
 }
 
+// ** 核心修复：重写骑缝章相关函数 **
+// 函数1: 动态重绘整个骑缝章组
+function redrawStraddleGroup(groupId, newProps) {
+    const totalPages = pdfDoc.numPages;
+    const pieceWidth = sealImageElement.width / totalPages;
+
+    // 创建一个足够大的离屏画布来绘制旋转后的完整印章
+    const offscreenCanvas = document.createElement('canvas');
+    const ctx = offscreenCanvas.getContext('2d');
+    const diagonal = Math.sqrt(sealImageElement.width ** 2 + sealImageElement.height ** 2);
+    offscreenCanvas.width = diagonal;
+    offscreenCanvas.height = diagonal;
+
+    // 将画布中心移到旋转点，进行旋转和缩放
+    ctx.translate(diagonal / 2, diagonal / 2);
+    ctx.rotate(newProps.angle * Math.PI / 180);
+    ctx.scale(1, newProps.scaleY); // 只应用垂直缩放
+    ctx.drawImage(sealImageElement, -sealImageElement.width / 2, -sealImageElement.height / 2);
+
+    // 遍历所有页面，更新每个碎片的图像
+    fabricCanvases.forEach((canvas, index) => {
+        if (!canvas) return;
+        const groupObjects = canvas.getObjects().filter(obj => obj.straddleGroup === groupId);
+        if (groupObjects.length === 0) return;
+
+        const piece = groupObjects[0];
+        
+        // 从旋转后的离屏画布中裁剪出正确的区域
+        const tempPieceCanvas = document.createElement('canvas');
+        tempPieceCanvas.width = piece.width;
+        tempPieceCanvas.height = piece.height;
+        const tempCtx = tempPieceCanvas.getContext('2d');
+
+        // 计算裁剪的起始点 (sx, sy)
+        const sx = (diagonal - sealImageElement.width) / 2 + (index * pieceWidth);
+        const sy = (diagonal - sealImageElement.height * newProps.scaleY) / 2;
+
+        tempCtx.drawImage(offscreenCanvas, sx, sy, pieceWidth, sealImageElement.height * newProps.scaleY, 0, 0, piece.width, piece.height);
+
+        // 更新 a Fabric 对象的图像内容
+        const newImg = new Image();
+        newImg.src = tempPieceCanvas.toDataURL();
+        newImg.onload = () => {
+            piece.setElement(newImg);
+            piece.set({
+                top: newProps.top,
+                angle: 0, // 图像本身已旋转，所以对象角度归零
+            }).setCoords();
+            canvas.renderAll();
+        };
+    });
+}
+
+// 函数2: 添加骑缝章的入口
 async function addStraddleSeal() {
     if (!sealImageElement || !pdfDoc) return;
     const totalPages = pdfDoc.numPages;
@@ -300,23 +351,23 @@ async function addStraddleSeal() {
             });
             canvas.add(imgPiece);
             canvas.renderAll();
-            
-            const syncObjects = (target) => {
-                fabricCanvases.forEach((c, idx) => {
-                    if (!c) return;
-                    c.getObjects().filter(obj => obj.straddleGroup === groupId && obj !== target)
-                     .forEach(obj => {
-                         obj.set({ top: target.top, scaleX: target.scaleX, scaleY: target.scaleY, angle: target.angle }).setCoords();
-                         c.renderAll();
-                    });
-                });
+
+            // 修改事件监听器
+            const onModified = (e) => {
+                const target = e.target;
+                const newProps = {
+                    top: target.top,
+                    angle: target.angle,
+                    scaleY: target.scaleY
+                };
+                redrawStraddleGroup(target.straddleGroup, newProps);
             };
-            imgPiece.on('moving', () => syncObjects(imgPiece));
-            imgPiece.on('scaling', () => syncObjects(imgPiece));
-            imgPiece.on('rotating', () => syncObjects(imgPiece));
+
+            imgPiece.on('mouseup', onModified); // 操作结束后触发
         });
     }
 }
+
 
 function deleteSelectedObject() {
     const canvas = fabricCanvases[currentActivePage - 1];
@@ -378,6 +429,7 @@ async function exportPDF() {
                     x: pdfX, y: pdfY,
                     width: (objWidth / canvas.originalWidth) * pageWidth,
                     height: (objHeight / canvas.originalHeight) * pageHeight,
+                    // **导出时使用对象自身的角度**
                     rotate: degrees(-obj.angle),
                 });
             }
