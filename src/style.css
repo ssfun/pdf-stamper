@@ -107,6 +107,8 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   overflow: auto; flex-grow: 1; display: flex; padding: 2rem;
   background-color: var(--bg-color); position: relative; height: 100%;
 }
+
+/* 拖拽区域 */
 .drop-zone {
   display: none; flex-direction: column; align-items: center; justify-content: center;
   width: 100%; height: 100%; border: 3px dashed var(--border-color);
@@ -140,7 +142,11 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 #zoom-value { font-weight: bold; min-width: 120px; text-align: right; }
 
 /* 右侧工具栏 */
-.toolbar { padding: 1.5rem; }
+.toolbar { 
+  padding: 1.5rem;
+  /* ** 核心修复：添加垂直滚动 ** */
+  overflow-y: auto;
+}
 .toolbar-header {
   text-align: center; margin-bottom: 2rem;
   border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;
@@ -157,6 +163,7 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
     margin-top: auto; text-align: center; font-size: 0.875rem;
     color: var(--text-color-light); padding-top: 1rem;
     border-top: 1px solid var(--border-color);
+    flex-shrink: 0; /* 防止页脚被压缩 */
 }
 .toolbar-footer a { color: var(--primary-color); text-decoration: none; }
 
@@ -173,8 +180,6 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 }
 .seal-preview-placeholder { color: var(--text-color-light); }
 .hidden { display: none; }
-
-/* **新增：旋转控制器样式** */
 .rotation-controls {
     display: flex;
     align-items: center;
