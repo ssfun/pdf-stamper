@@ -1,11 +1,11 @@
 import './style.css';
 
-// 提醒：请确保您的库文件已放置在 /src/lib/ 目录下
-// 因为这些库不是标准的ES模块，我们通过动态创建script标签来加载它们
+// 动态加载位于 public 文件夹下的脚本
 function loadScript(src) {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = src;
+    // 路径现在从网站根目录开始，Vite会处理好
+    script.src = src; 
     script.onload = resolve;
     script.onerror = reject;
     document.head.appendChild(script);
@@ -14,11 +14,11 @@ function loadScript(src) {
 
 // ---- 全局变量和状态 ----
 let pdfDoc = null;
-let originalPdfBytes = null; // 存储原始PDF文件的二进制数据，用于导出
-let fabricCanvases = []; // 存储每个页面的 Fabric.js canvas 实例
-let sealImage = null; // 存储印章图片对象 (Fabric Image)
-let sealImageElement = null; // 存储印章图片的HTMLImageElement，用于骑缝章
-let currentActivePage = 1; // 当前活动页面
+let originalPdfBytes = null;
+let fabricCanvases = []; 
+let sealImage = null; 
+let sealImageElement = null; 
+let currentActivePage = 1;
 
 // ---- DOM 元素获取 ----
 const pdfInputElement = document.getElementById('pdfInput');
@@ -37,18 +37,17 @@ const exportPdfBtn = document.getElementById('exportPDF');
 
 // ---- 主程序入口 ----
 async function main() {
-  // 动态加载依赖的库文件
+  // *** 路径已更新 ***
+  // 加载位于 /lib/ 目录下的库文件
   await Promise.all([
-    loadScript('./src/lib/pdf.min.js'),
-    loadScript('./src/lib/fabric.min.js'),
-    // jspdf is not used in the original logic, pdf-lib is used for exporting
-    // loadScript('./src/lib/jspdf.umd.min.js'), 
-    loadScript('./src/lib/pdf-lib.min.js'),
+    loadScript('/lib/pdf.min.js'),
+    loadScript('/lib/fabric.min.js'),
+    loadScript('/lib/pdf-lib.min.js'),
   ]);
-
+    
+  // *** 路径已更新 ***
   // 设置PDF.js worker的路径
-  // 确保你已经将 pdf.worker.min.js 文件放在了 /public/src/lib/ 目录下
-  pdfjsLib.GlobalWorkerOptions.workerSrc = './src/lib/pdf.worker.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/lib/pdf.worker.min.js';
 
   // 初始化事件监听
   initializeEventListeners();
@@ -99,6 +98,7 @@ function initializeEventListeners() {
     // 监听键盘删除事件
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Delete' || e.key === 'Backspace') {
+            e.preventDefault(); // 防止浏览器后退
             deleteSelectedObject();
         }
     });
@@ -195,13 +195,11 @@ async function showPage(pageNum) {
         canvas.height = viewport.height;
         canvas.width = viewport.width;
         
-        // 渲染PDF页面到临时canvas
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = viewport.width;
         tempCanvas.height = viewport.height;
         await page.render({ canvasContext: tempCanvas.getContext('2d'), viewport }).promise;
 
-        // 初始化Fabric Canvas并设置PDF页面为背景
         const fabricCanvas = new fabric.Canvas(canvas);
         fabricCanvas.setBackgroundImage(
             new fabric.Image(tempCanvas),
@@ -249,7 +247,7 @@ function addNormalSeal() {
     if (!canvas) return;
 
     sealImage.clone((cloned) => {
-        const scale = canvas.width / 8; // 调整印章初始大小
+        const scale = canvas.width / 8;
         cloned.scaleToWidth(scale);
         cloned.set({
             left: (canvas.width - cloned.getScaledWidth()) / 2,
@@ -281,10 +279,11 @@ function addStraddleSeal() {
 
     const totalPages = pdfDoc.numPages;
     const pieceWidth = sealImageElement.width / totalPages;
-    const initialScale = (fabricCanvases[0].width / 8) / sealImageElement.width; // 初始缩放比例
+    const initialScale = (fabricCanvases[0].width / 8) / sealImageElement.width;
+
+    const groupId = `mainStraddle-${Date.now()}`; // 为这一组骑缝章生成一个唯一的ID
 
     fabricCanvases.forEach((canvas, index) => {
-        // 创建一个临时canvas来裁剪图片
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = pieceWidth;
         tempCanvas.height = sealImageElement.height;
@@ -298,18 +297,16 @@ function addStraddleSeal() {
             imgPiece.set({
                 left: canvas.width - (pieceWidth * initialScale),
                 top: 200,
-                hasControls: false, // 骑缝章通常整体移动
+                hasControls: false,
                 borderColor: '#007bff',
-                straddleGroup: `mainStraddle-${Date.now()}`, // 唯一标识一组骑缝章
+                straddleGroup: groupId,
                 pageIndex: index
             });
             canvas.add(imgPiece);
             canvas.renderAll();
 
-            // 同步移动
             imgPiece.on('moving', function() {
                 const currentTop = this.top;
-                const groupId = this.straddleGroup;
                 fabricCanvases.forEach(c => {
                     c.getObjects().forEach(obj => {
                         if (obj.straddleGroup === groupId && obj !== this) {
@@ -323,7 +320,6 @@ function addStraddleSeal() {
     });
 }
 
-
 /**
  * 删除当前选中的对象（普通章或骑缝章的一部分）
  */
@@ -333,7 +329,6 @@ function deleteSelectedObject() {
 
     const activeObject = canvas.getActiveObject();
     if (activeObject) {
-        // 如果是骑缝章，则删除所有关联部分
         if (activeObject.straddleGroup) {
             const groupId = activeObject.straddleGroup;
             fabricCanvases.forEach(c => {
@@ -341,12 +336,12 @@ function deleteSelectedObject() {
                 objectsToDelete.forEach(obj => c.remove(obj));
                 c.renderAll();
             });
-        } else { // 否则只删除当前对象
+        } else {
             canvas.remove(activeObject);
             canvas.renderAll();
         }
     } else {
-        alert('请先在画布上选中一个印章！');
+        // 用户可能没有选中任何东西，静默处理即可，无需弹窗
     }
 }
 
@@ -359,10 +354,13 @@ async function exportPDF() {
         return;
     }
     
-    alert('正在导出PDF，请稍候...');
+    const exportButton = document.getElementById('exportPDF');
+    const originalText = exportButton.textContent;
+    exportButton.textContent = '正在导出...';
+    exportButton.disabled = true;
 
     try {
-        const { PDFDocument } = window.PDFLib;
+        const { PDFDocument, degrees } = window.PDFLib;
         const pdfDoc = await PDFDocument.load(originalPdfBytes);
         const pages = pdfDoc.getPages();
 
@@ -379,12 +377,9 @@ async function exportPDF() {
                 const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
                 const pngImage = await pdfDoc.embedPng(pngImageBytes);
 
-                const scaleX = obj.scaleX;
-                const scaleY = obj.scaleY;
-                const objWidth = obj.width * scaleX;
-                const objHeight = obj.height * scaleY;
+                const objWidth = obj.getScaledWidth();
+                const objHeight = obj.getScaledHeight();
                 
-                // 转换坐标系：Fabric左上角为(0,0)，PDF-Lib左下角为(0,0)
                 const x = obj.left;
                 const y = pageHeight - obj.top - objHeight;
 
@@ -393,7 +388,7 @@ async function exportPDF() {
                     y: y / canvas.height * pageHeight,
                     width: objWidth / canvas.width * pageWidth,
                     height: objHeight / canvas.height * pageHeight,
-                    rotate: PDFLib.degrees(-obj.angle), // Fabric顺时针为正, PDF-Lib逆时针为正
+                    rotate: degrees(-obj.angle),
                 });
             }
         }
@@ -411,6 +406,9 @@ async function exportPDF() {
     } catch(error) {
         console.error('导出PDF时发生错误:', error);
         alert('导出失败，详情请查看控制台。');
+    } finally {
+        exportButton.textContent = originalText;
+        exportButton.disabled = false;
     }
 }
 
