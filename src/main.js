@@ -15,8 +15,9 @@ function loadScript(src) {
 let pdfDoc = null;
 let originalPdfBytes = null;
 let fabricCanvases = [];
-let sealImage = null; // 存储 Fabric Image 对象
-let originalSealBytes = null; // **新增：存储原始印章文件的二进制数据**
+let sealImage = null;
+let sealImageElement = null;
+let currentActivePage = 1;
 
 // ---- DOM 元素获取 ----
 const pdfInputElement = document.getElementById('pdfInput');
@@ -138,10 +139,15 @@ async function initializeFabricCanvasForPage(pageNum) {
     if (fabricCanvases[pageNum - 1]) {
         return fabricCanvases[pageNum - 1];
     }
+
     const page = await pdfDoc.getPage(pageNum);
     const viewport = page.getViewport({ scale: 2.0 });
     const canvas = document.getElementById(`canvas-${pageNum}`);
-    if (!canvas) return null;
+    
+    if (!canvas) {
+      console.error(`无法找到 page ${pageNum} 的 canvas 元素`);
+      return null;
+    }
 
     canvas.height = viewport.height;
     canvas.width = viewport.width;
@@ -160,30 +166,33 @@ async function initializeFabricCanvasForPage(pageNum) {
 async function showPage(pageNum) {
     if (!pdfDoc) return;
     currentActivePage = pageNum;
+
     document.querySelectorAll('#canvas-container > div').forEach(div => div.style.display = 'none');
     document.querySelectorAll('.thumbnail-item').forEach(item => item.classList.remove('active'));
+
     const activeThumb = document.querySelector(`.thumbnail-item[data-page-number="${pageNum}"]`);
     if (activeThumb) activeThumb.classList.add('active');
+
     const wrapper = document.getElementById(`page-wrapper-${pageNum}`);
     wrapper.style.display = 'block';
+
     await initializeFabricCanvasForPage(pageNum);
 }
 
 function handleSealFile(file) {
     const reader = new FileReader();
     reader.onload = function(event) {
-        // **FIX 1: 存储原始印章文件数据**
-        originalSealBytes = new Uint8Array(event.target.result); 
-        const blob = new Blob([originalSealBytes]);
-        const objectURL = URL.createObjectURL(blob);
-
-        fabric.Image.fromURL(objectURL, function(img) {
-            sealImage = img;
-            sealNameElement.textContent = file.name;
-            alert('印章已准备好，现在可以添加印章了。');
-        });
+        sealImageElement = new Image();
+        sealImageElement.src = event.target.result;
+        sealImageElement.onload = () => {
+            fabric.Image.fromURL(event.target.result, function(img) {
+                sealImage = img;
+                sealNameElement.textContent = file.name;
+                alert('印章已准备好，现在可以添加印章了。');
+            });
+        }
     };
-    reader.readAsArrayBuffer(file); // 读取为 ArrayBuffer
+    reader.readAsDataURL(file);
 }
 
 function addNormalSeal() {
@@ -211,66 +220,65 @@ function addNormalSeal() {
 }
 
 async function addStraddleSeal() {
-    if (!sealImage) return alert('请先选择印章图片！');
+    if (!sealImageElement) return alert('请先选择印章图片！');
     if (!pdfDoc) return alert('请先上传PDF文件！');
 
     const totalPages = pdfDoc.numPages;
+    const pieceWidth = sealImageElement.width / totalPages;
     const groupId = `straddle-${Date.now()}`;
+    
     const refCanvas = await initializeFabricCanvasForPage(1);
     if (!refCanvas) return;
-    
-    // 使用 sealImage 的原始尺寸来计算
-    const pieceWidth = sealImage.width / totalPages;
-    const initialScale = (refCanvas.width / 5) / sealImage.width;
+    const initialScale = (refCanvas.width / 5) / sealImageElement.width;
 
     for (let i = 0; i < totalPages; i++) {
         const pageNum = i + 1;
         const canvas = await initializeFabricCanvasForPage(pageNum);
         if (!canvas) continue;
 
-        sealImage.clone( (clonedPiece) => {
-            clonedPiece.set({
-                left: canvas.width - (pieceWidth * initialScale),
-                top: 400,
-                // **FIX 2: 锁定水平移动**
-                lockMovementX: true, 
-                hasControls: true,
-                borderColor: '#007bff',
-                straddleGroup: groupId,
-                pageIndex: i,
-                // 裁剪图片，只显示当前页的部分
-                clipPath: new fabric.Rect({
-                    left: (-clonedPiece.width / 2) + (pieceWidth * i),
-                    top: -clonedPiece.height / 2,
-                    width: pieceWidth,
-                    height: clonedPiece.height
-                })
-            });
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = pieceWidth;
+        tempCanvas.height = sealImageElement.height;
+        tempCanvas.getContext('2d').drawImage(sealImageElement, i * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
 
-            canvas.add(clonedPiece);
-            canvas.renderAll();
-            
-            const syncObjects = (target) => {
-                fabricCanvases.forEach(c => {
-                    if (!c) return;
-                    c.getObjects().forEach(obj => {
-                        if (obj.straddleGroup === groupId && obj !== target) {
-                            obj.set({
-                                top: target.top,
-                                scaleX: target.scaleX,
-                                scaleY: target.scaleY,
-                                angle: target.angle
-                            }).setCoords();
-                        }
-                    });
-                    c.renderAll();
+        (function(currentCanvas, currentIndex) {
+            fabric.Image.fromURL(tempCanvas.toDataURL(), (imgPiece) => {
+                imgPiece.scale(initialScale);
+                imgPiece.set({
+                    left: currentCanvas.width - (pieceWidth * initialScale),
+                    top: 400,
+                    hasControls: true,
+                    borderColor: '#007bff',
+                    // **FIX 2: 锁定水平移动**
+                    lockMovementX: true, 
+                    straddleGroup: groupId,
+                    pageIndex: currentIndex
                 });
-            };
-            
-            clonedPiece.on('moving', () => syncObjects(clonedPiece));
-            clonedPiece.on('scaling', () => syncObjects(clonedPiece));
-            clonedPiece.on('rotating', () => syncObjects(clonedPiece));
-        });
+                currentCanvas.add(imgPiece);
+                currentCanvas.renderAll();
+                
+                const syncObjects = (target) => {
+                    fabricCanvases.forEach(c => {
+                        if (!c) return;
+                        c.getObjects().forEach(obj => {
+                            if (obj.straddleGroup === groupId && obj !== target) {
+                                obj.set({
+                                    top: target.top,
+                                    scaleX: target.scaleX,
+                                    scaleY: target.scaleY,
+                                    angle: target.angle
+                                }).setCoords();
+                            }
+                        });
+                        c.renderAll();
+                    });
+                };
+                
+                imgPiece.on('moving', () => syncObjects(imgPiece));
+                imgPiece.on('scaling', () => syncObjects(imgPiece));
+                imgPiece.on('rotating', () => syncObjects(imgPiece));
+            });
+        })(canvas, i);
     }
 }
 
@@ -309,9 +317,6 @@ async function exportPDF() {
         const pdfDoc = await PDFDocument.load(originalPdfBytes);
         const pages = pdfDoc.getPages();
 
-        // **FIX 1.1: 使用原始印章数据进行嵌入**
-        let embeddedSealImages = {}; // 缓存已嵌入的印章图片，避免重复嵌入
-
         for (let i = 0; i < pages.length; i++) {
             const canvas = fabricCanvases[i];
             if (!canvas) continue; 
@@ -322,24 +327,24 @@ async function exportPDF() {
             const objects = canvas.getObjects();
             for (const obj of objects) {
                 if (obj.isBackgroundImage) continue;
-                
-                let embeddedImg;
-                const groupId = obj.straddleGroup || 'normal';
-                
-                // 如果这个印章组的原始图片还没被嵌入，就嵌入它
-                if (!embeddedSealImages[groupId]) {
-                    // 对于骑缝章，使用完整的原始印章。对于普通章，也是如此。
-                     embeddedSealImages[groupId] = await pdfDoc.embedPng(originalSealBytes);
-                }
-                embeddedImg = embeddedSealImages[groupId];
 
-                const objWidth = obj.width * obj.scaleX;
-                const objHeight = obj.height * obj.scaleY;
+                // **FIX 1: 使用最高质量导出**
+                // 使用原始 Image Element 导出，而不是缩放后的 canvas 对象
+                // 这需要确保 obj 拥有一个对原始图像的引用，或者我们在这里重新加载它。
+                // 一个更简单且高效的方法是使用 toDataURL 的 multiplier 属性。
+                const multiplier = 2; // 使用2倍分辨率导出，可以根据需要调整
+                const imgDataUrl = obj.toDataURL({ format: 'png', multiplier: multiplier });
+                
+                const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
+                const pngImage = await pdfDoc.embedPng(pngImageBytes);
+
+                const objWidth = obj.getScaledWidth();
+                const objHeight = obj.getScaledHeight();
                 
                 const pdfX = (obj.left / canvas.width) * pageWidth;
                 const pdfY = pageHeight - ((obj.top + objHeight) / canvas.height) * pageHeight;
 
-                page.drawImage(embeddedImg, {
+                page.drawImage(pngImage, {
                     x: pdfX,
                     y: pdfY,
                     width: (objWidth / canvas.width) * pageWidth,
