@@ -1,4 +1,4 @@
-:root {
+toolbar:root {
   --font-family-sans: "Inter", "Helvetica Neue", "Helvetica", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
   --primary-color: #007bff;
   --primary-hover-color: #0056b3;
@@ -32,7 +32,7 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   grid-template-columns: var(--sidebar-collapsed-width) 1fr 320px;
 }
 
-.sidebar, .main-content-wrapper, .toolbar {
+.sidebar, .main-content-wrapper, . {
   background-color: var(--surface-color);
   border-radius: var(--border-radius);
   box-shadow: var(--box-shadow);
@@ -140,6 +140,28 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 }
 #zoom-slider { flex-grow: 1; max-width: 200px; }
 #zoom-value { font-weight: bold; min-width: 120px; text-align: right; }
+
+/* **新增：滑块刻度样式** */
+#zoom-slider {
+  position: relative;
+}
+/* 隐藏 datalist 本身 */
+datalist {
+  display: none;
+}
+/* 这是一个通用的技巧，来显示刻度线，但浏览器支持不一 */
+.zoom-controls {
+  position: relative;
+}
+.zoom-controls::after {
+  content: '';
+  position: absolute;
+  left: 70px; /* 根据label宽度微调 */
+  right: 180px; /* 根据 value 宽度微调 */
+  top: 28px; /* 微调垂直位置 */
+  height: 5px;
+  background: repeating-linear-gradient(to right, var(--border-color) 0, var(--border-color) 1px, transparent 1px, transparent 10%);
+}
 
 /* 右侧工具栏 */
 .toolbar { 
