@@ -61,7 +61,6 @@ function initializeEventListeners() {
         }, 300);
     });
     
-    // **FIX 1: 修正拖拽事件的监听对象**
     mainContent.addEventListener('dragover', (e) => { e.preventDefault(); mainContent.classList.add('dragover'); });
     mainContent.addEventListener('dragleave', () => mainContent.classList.remove('dragover'));
     mainContent.addEventListener('drop', (e) => {
@@ -86,17 +85,13 @@ function initializeEventListeners() {
         if (newPage !== currentActivePage) showPage(newPage);
     });
 
+    // **FIX 2: 修正缩放逻辑**
     zoomSlider.addEventListener('input', (e) => {
         globalZoomMultiplier = parseFloat(e.target.value);
         zoomValue.textContent = `${Math.round(globalZoomMultiplier * 100)}% (Fit)`;
         const canvas = fabricCanvases[currentActivePage - 1];
         if (canvas) {
             const fitScale = pageFitScales[currentActivePage - 1];
-            // **FIX 3: 修正缩放逻辑**
-            // Fabric.js的setZoom会影响尺寸，所以我们直接修改canvas元素的尺寸
-            const newWidth = canvas.originalWidth * fitScale * globalZoomMultiplier;
-            const newHeight = canvas.originalHeight * fitScale * globalZoomMultiplier;
-            canvas.setDimensions({ width: newWidth, height: newHeight });
             canvas.setZoom(fitScale * globalZoomMultiplier);
             canvas.renderAll();
         }
@@ -124,11 +119,10 @@ function updatePageNavigator() {
 }
 
 // ---- 核心功能函数 ----
-
 async function handlePdfFile(file) {
-    appContainer.classList.remove('no-pdf-loaded'); // **FIX 1: 移除初始状态类**
+    appContainer.classList.remove('no-pdf-loaded');
     thumbnailContainer.innerHTML = '<p>渲染中...</p>';
-    mainContent.innerHTML = ''; // **FIX 3: 清空主工作区，准备放入画布**
+    mainContent.innerHTML = '';
     const fileReader = new FileReader();
     fileReader.onload = async (e) => {
         originalPdfBytes = new Uint8Array(e.target.result);
@@ -166,8 +160,11 @@ async function renderAllPages() {
         thumbCanvas.width = viewport.width;
         await page.render({ canvasContext: thumbCanvas.getContext('2d'), viewport }).promise;
         thumbItem.addEventListener('click', () => showPage(i));
+        
+        // 创建画布的DOM结构
         const mainCanvasWrapper = document.createElement('div');
         mainCanvasWrapper.id = `page-wrapper-${i}`;
+        mainCanvasWrapper.className = 'canvas-wrapper';
         mainCanvasWrapper.style.display = 'none';
         const mainCanvas = document.createElement('canvas');
         mainCanvas.id = `canvas-${i}`;
@@ -177,7 +174,7 @@ async function renderAllPages() {
     await showPage(1);
 }
 
-// **FIX 3: 恢复正确的渲染逻辑**
+// **FIX 3: 恢复稳定可靠的渲染逻辑**
 async function initializeFabricCanvasForPage(pageNum) {
     if (fabricCanvases[pageNum - 1]) return fabricCanvases[pageNum - 1];
 
@@ -185,29 +182,33 @@ async function initializeFabricCanvasForPage(pageNum) {
     
     // 使用高分辨率获取原始尺寸
     const highResViewport = page.getViewport({ scale: 2.0 });
-    const originalWidth = highResViewport.width;
-    const originalHeight = highResViewport.height;
-
+    
+    // 计算自适应缩放
     const containerWidth = mainContent.clientWidth - 40;
     const containerHeight = mainContent.clientHeight - 40;
-    const scaleX = containerWidth / originalWidth;
-    const scaleY = containerHeight / originalHeight;
+    const scaleX = containerWidth / highResViewport.width;
+    const scaleY = containerHeight / highResViewport.height;
     const fitScale = Math.min(scaleX, scaleY);
     pageFitScales[pageNum - 1] = fitScale;
 
-    const canvasEl = document.getElementById(`canvas-${pageNum}`);
-    canvasEl.width = originalWidth; // 设置为高分辨率尺寸
-    canvasEl.height = originalHeight;
+    // 创建一个临时画布用于渲染PDF
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = highResViewport.width;
+    tempCanvas.height = highResViewport.height;
+    await page.render({ canvasContext: tempCanvas.getContext('2d'), viewport: highResViewport }).promise;
 
+    // 初始化Fabric画布并设置背景
+    const canvasEl = document.getElementById(`canvas-${pageNum}`);
     const fabricCanvas = new fabric.Canvas(canvasEl);
+    fabricCanvas.setBackgroundImage(new fabric.Image(tempCanvas), fabricCanvas.renderAll.bind(fabricCanvas));
     
-    // 将原始尺寸存储在canvas对象上
-    fabricCanvas.originalWidth = originalWidth;
-    fabricCanvas.originalHeight = originalHeight;
-    
-    // 使用高分辨率渲染背景
-    const ctx = fabricCanvas.getContext('2d');
-    await page.render({ canvasContext: ctx, viewport: highResViewport }).promise;
+    // 存储原始尺寸并设置初始尺寸
+    fabricCanvas.originalWidth = highResViewport.width;
+    fabricCanvas.originalHeight = highResViewport.height;
+    fabricCanvas.setDimensions({
+        width: highResViewport.width * fitScale,
+        height: highResViewport.height * fitScale
+    });
 
     fabricCanvases[pageNum - 1] = fabricCanvas;
     return fabricCanvas;
@@ -217,7 +218,7 @@ async function showPage(pageNum) {
     if (!pdfDoc) return;
     currentActivePage = pageNum;
     
-    document.querySelectorAll('.main-content > div[id^="page-wrapper-"]').forEach(div => div.style.display = 'none');
+    document.querySelectorAll('.canvas-wrapper').forEach(div => div.style.display = 'none');
     document.querySelectorAll('.thumbnail-item').forEach(item => item.classList.remove('active'));
     
     const activeThumb = document.querySelector(`.thumbnail-item[data-page-number="${pageNum}"]`);
@@ -229,9 +230,10 @@ async function showPage(pageNum) {
     const canvas = await initializeFabricCanvasForPage(pageNum);
     if (canvas) {
         const fitScale = pageFitScales[pageNum - 1];
-        const newWidth = canvas.originalWidth * fitScale * globalZoomMultiplier;
-        const newHeight = canvas.originalHeight * fitScale * globalZoomMultiplier;
-        canvas.setDimensions({ width: newWidth, height: newHeight });
+        canvas.setDimensions({
+            width: canvas.originalWidth * fitScale * globalZoomMultiplier,
+            height: canvas.originalHeight * fitScale * globalZoomMultiplier
+        });
         canvas.setZoom(fitScale * globalZoomMultiplier);
         canvas.renderAll();
     }
@@ -303,11 +305,13 @@ async function addStraddleSeal() {
             canvas.renderAll();
             
             const syncObjects = (target) => {
-                fabricCanvases.forEach(c => {
+                fabricCanvases.forEach((c, idx) => {
                     if (!c) return;
                     c.getObjects().filter(obj => obj.straddleGroup === groupId && obj !== target)
-                     .forEach(obj => obj.set({ top: target.top, scaleX: target.scaleX, scaleY: target.scaleY, angle: target.angle }).setCoords());
-                    c.renderAll();
+                     .forEach(obj => {
+                         obj.set({ top: target.top, scaleX: target.scaleX, scaleY: target.scaleY, angle: target.angle }).setCoords();
+                         c.renderAll();
+                    });
                 });
             };
             imgPiece.on('moving', () => syncObjects(imgPiece));
@@ -357,11 +361,14 @@ async function exportPDF() {
                 const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
                 const pngImage = await pdfDoc.embedPng(pngImageBytes);
                 
+                // 使用原始画布尺寸进行坐标计算
                 const objWidth = obj.getScaledWidth();
                 const objHeight = obj.getScaledHeight();
-                
-                const pdfX = (obj.left / canvas.originalWidth) * pageWidth;
-                const pdfY = pageHeight - ((obj.top + objHeight) / canvas.originalHeight) * pageHeight;
+                const objLeft = obj.left;
+                const objTop = obj.top;
+
+                const pdfX = (objLeft / canvas.originalWidth) * pageWidth;
+                const pdfY = pageHeight - ((objTop + objHeight) / canvas.originalHeight) * pageHeight;
 
                 page.drawImage(pngImage, {
                     x: pdfX, y: pdfY,
