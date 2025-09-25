@@ -270,74 +270,87 @@ function addNormalSeal() {
     });
 }
 
-// ** 核心修复：使用 clipPath 实现骑缝章 **
+// ** 核心修复：重写骑缝章相关函数 **
+// 函数1: 动态重绘整个骑缝章组
+function redrawStraddleGroup(target) {
+    const { straddleGroup: groupId, scaleX, scaleY, angle, top } = target;
+
+    // 1. 创建一个足够大的离屏画布
+    const offscreenCanvas = document.createElement('canvas');
+    const ctx = offscreenCanvas.getContext('2d');
+    const diagonal = Math.hypot(sealImageElement.width, sealImageElement.height);
+    offscreenCanvas.width = diagonal * scaleX;
+    offscreenCanvas.height = diagonal * scaleX; // Use scaleX for proportional scaling
+    const center = offscreenCanvas.width / 2;
+
+    // 2. 将变换后的完整印章绘制到离屏画布中心
+    ctx.translate(center, center);
+    ctx.rotate(angle * Math.PI / 180);
+    ctx.scale(scaleX, scaleX); // Use scaleX for proportional scaling
+    ctx.drawImage(sealImageElement, -sealImageElement.width / 2, -sealImageElement.height / 2);
+
+    // 3. 遍历所有页面，更新每个碎片的图像
+    const pieceWidth = (sealImageElement.width * scaleX) / totalPages;
+    fabricCanvases.forEach((canvas, index) => {
+        if (!canvas) return;
+        const piece = canvas.getObjects().find(obj => obj.straddleGroup === groupId);
+        if (!piece) return;
+
+        // 4. 从离屏画布中裁剪出正确的区域
+        const tempPieceCanvas = document.createElement('canvas');
+        const scaledPieceWidth = piece.width * piece.scaleX;
+        tempPieceCanvas.width = scaledPieceWidth;
+        tempPieceCanvas.height = offscreenCanvas.height;
+        const tempCtx = tempPieceCanvas.getContext('2d');
+
+        const sx = center - (sealImageElement.width * scaleX / 2) + (index * pieceWidth);
+        tempCtx.drawImage(offscreenCanvas, sx, 0, pieceWidth, offscreenCanvas.height, 0, 0, scaledPieceWidth, offscreenCanvas.height);
+
+        // 5. 更新 Fabric 对象的图像内容
+        const newImg = new Image();
+        newImg.src = tempPieceCanvas.toDataURL();
+        newImg.onload = () => {
+            piece.setElement(newImg);
+            piece.set({
+                top: top,
+                angle: 0, // 角度已烘焙到图片里
+            }).setCoords();
+            canvas.renderAll();
+        };
+    });
+}
+
+// 函数2: 添加骑缝章的入口
 async function addStraddleSeal() {
     if (!sealImageElement || !pdfDoc) return;
     const totalPages = pdfDoc.numPages;
+    const pieceWidth = sealImageElement.width / totalPages;
     const groupId = `straddle-${Date.now()}`;
-    const sealSrc = sealImageElement.src;
-
-    // 使用第一页计算初始缩放值
-    const refCanvas = await initializeFabricCanvasForPage(1);
-    if (!refCanvas) return;
-    const initialScale = (refCanvas.originalWidth / 5) / sealImageElement.width;
-
+    
     for (let i = 0; i < totalPages; i++) {
         const pageNum = i + 1;
         const canvas = await initializeFabricCanvasForPage(pageNum);
         if (!canvas) continue;
-
-        // 这是单片在画布上的显示宽度
-        const scaledPieceWidth = (sealImageElement.width / totalPages) * initialScale;
-
-        // 为每一页都创建一个完整的印章图片对象
-        fabric.Image.fromURL(sealSrc, (img) => {
-            // 创建一个剪裁矩形，定义了只显示印章的哪一部分
-            // 这里的尺寸是相对于原始、未缩放的图片
-            const clipRect = new fabric.Rect({
-                left: (sealImageElement.width / totalPages) * i,
-                top: 0,
-                width: sealImageElement.width / totalPages,
-                height: sealImageElement.height
+        const initialScale = (canvas.originalWidth / 5) / sealImageElement.width;
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = pieceWidth;
+        tempCanvas.height = sealImageElement.height;
+        tempCanvas.getContext('2d').drawImage(sealImageElement, i * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
+        
+        fabric.Image.fromURL(tempCanvas.toDataURL(), (imgPiece) => {
+            imgPiece.scale(initialScale);
+            imgPiece.set({
+                left: canvas.originalWidth - (canvas.originalWidth / 5), // Simplified positioning
+                top: 400, hasControls: true, borderColor: '#007bff',
+                lockMovementX: true, straddleGroup: groupId, pageIndex: i,
+                originX: 'left', originY: 'top', 
             });
-
-            img.set({
-                scaleX: initialScale,
-                scaleY: initialScale,
-                // **关键定位**：将完整图片的左上角定位，使得被剪裁的区域刚好出现在页面右侧
-                left: canvas.originalWidth - scaledPieceWidth - (scaledPieceWidth * i),
-                top: 400,
-                hasControls: true,
-                borderColor: '#007bff',
-                lockMovementX: true,
-                straddleGroup: groupId,
-                pageIndex: i,
-                clipPath: clipRect, // 应用剪裁路径
-                originX: 'left',
-                originY: 'top',
-            });
-            
-            canvas.add(img);
+            canvas.add(imgPiece);
             canvas.renderAll();
 
-            // 当一个碎片被修改时，同步所有其他碎片的变换
-            const onModified = (e) => {
-                const target = e.target;
-                fabricCanvases.forEach(c => {
-                    if (!c) return;
-                    c.getObjects().filter(obj => obj.straddleGroup === groupId && obj !== target)
-                     .forEach(obj => {
-                         obj.set({
-                             top: target.top,
-                             scaleX: target.scaleX,
-                             scaleY: target.scaleY,
-                             angle: target.angle,
-                         }).setCoords();
-                         c.renderAll();
-                    });
-                });
-            };
-            img.on('modified', onModified);
+            // 操作结束后，触发重绘
+            imgPiece.on('modified', (e) => redrawStraddleGroup(e.target));
         });
     }
 }
@@ -379,24 +392,18 @@ async function exportPDF() {
             const objects = canvas.getObjects().filter(obj => !obj.isBackgroundImage);
             for (const obj of objects) {
                 const multiplier = 2;
-                // toDataURL 会自动应用 clipPath
                 const imgDataUrl = obj.toDataURL({ format: 'png', multiplier });
                 const pngImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
                 const pngImage = await pdfDoc.embedPng(pngImageBytes);
                 
-                // 导出时使用被剪裁后的尺寸
                 const objWidth = obj.getScaledWidth();
                 const objHeight = obj.getScaledHeight();
                 
                 let objLeft = obj.left;
                 let objTop = obj.top;
 
-                if (obj.originX === 'center') {
-                    objLeft -= objWidth / 2;
-                }
-                if (obj.originY === 'center') {
-                    objTop -= objHeight / 2;
-                }
+                if (obj.originX === 'center') objLeft -= objWidth / 2;
+                if (obj.originY === 'center') objTop -= objHeight / 2;
                 
                 const pdfX = (objLeft / canvas.originalWidth) * pageWidth;
                 const pdfY = pageHeight - ((objTop + objHeight) / canvas.originalHeight) * pageHeight;
