@@ -21,14 +21,14 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 /* 主应用布局 */
 #app {
   display: grid;
-  grid-template-columns: var(--sidebar-width) auto 1fr 320px;
+  grid-template-columns: var(--sidebar-width) 1fr 320px;
   height: 100vh;
   gap: 1rem;
   padding: 1rem;
   transition: grid-template-columns 0.3s ease-in-out;
 }
 #app.sidebar-collapsed {
-  grid-template-columns: 0px auto 1fr 320px;
+  grid-template-columns: 0 1fr 320px;
 }
 
 .sidebar, .main-content-wrapper, .toolbar {
@@ -45,6 +45,7 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   padding: 1rem;
   overflow: hidden;
   transition: padding 0.3s ease-in-out, transform 0.3s ease-in-out;
+  position: relative; /* 为按钮定位提供锚点 */
 }
 #app.sidebar-collapsed .sidebar {
   padding-left: 0;
@@ -76,82 +77,55 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 .thumbnail-item.active { border-color: var(--primary-color); }
 .thumbnail-item p { text-align: center; margin-top: 0.5rem; font-size: 0.875rem; }
 
+/* **FIX 2: 侧边栏开关按钮新样式** */
 .sidebar-toggle-btn {
-  background-color: var(--surface-color);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--box-shadow);
-  width: 32px;
-  height: 32px;
-  padding: 4px;
-  cursor: pointer;
-  color: var(--text-color-light);
-  border-radius: 50%;
+  background: none; border: none; padding: 4px; cursor: pointer;
+  color: var(--text-color-light); border-radius: var(--border-radius);
   transition: all 0.2s;
-  z-index: 100;
-  margin-left: -1rem;
-  margin-right: -1rem;
+  position: absolute; /* 绝对定位 */
+  top: 1rem;
+  right: 1rem;
 }
-.sidebar-toggle-btn:hover { color: var(--text-color); }
+.sidebar-toggle-btn:hover { background-color: var(--bg-color); color: var(--text-color); }
 #app.sidebar-collapsed .sidebar-toggle-btn {
-  transform: translateX(-16px);
+  transform: translateX(calc(var(--sidebar-width) + 0.5rem)); /* 移出隐藏区域 */
+  background-color: var(--surface-color);
+  box-shadow: var(--box-shadow);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  width: 32px; height: 32px;
 }
 .sidebar-toggle-btn svg { transition: transform 0.3s ease-in-out; }
-#app.sidebar-collapsed .sidebar-toggle-btn svg {
-  transform: rotate(180deg);
-}
+#app.sidebar-collapsed .sidebar-toggle-btn svg { transform: rotate(180deg); }
 
 /* 中间主工作区 */
-.main-content-wrapper { 
-  padding: 0; 
-  position: relative; 
-  /* ** 核心修复：强制此容器不可被内容撑开 ** */
-  overflow: hidden;
-}
+.main-content-wrapper { padding: 0; position: relative; overflow: hidden; }
 .main-content {
-  overflow: auto;
-  flex-grow: 1;
-  display: flex;
-  padding: 2rem;
-  background-color: var(--bg-color);
-  position: relative;
-  height: 100%; /* 确保它占满父容器 */
+  overflow: auto; flex-grow: 1; display: flex;
+  padding: 2rem; background-color: var(--bg-color);
+  position: relative; height: 100%;
+  /* **FIX 1: 关键修复，确保padding被包含在宽度计算内** */
+  box-sizing: border-box;
 }
 
 /* 拖拽区域 */
 .drop-zone {
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  border: 3px dashed var(--border-color);
-  border-radius: var(--border-radius);
+  display: none; flex-direction: column; align-items: center;
+  justify-content: center; width: 100%; height: 100%;
+  border: 3px dashed var(--border-color); border-radius: var(--border-radius);
   transition: all 0.2s;
 }
-#app.no-pdf-loaded .main-content {
-  padding: 0;
-}
-#app.no-pdf-loaded .drop-zone {
-  display: flex;
-}
+#app.no-pdf-loaded .main-content { padding: 0; }
+#app.no-pdf-loaded .drop-zone { display: flex; }
 .main-content.dragover .drop-zone {
-  display: flex;
-  position: absolute; top: 0; left: 0;
-  background-color: rgba(0, 123, 255, 0.1);
-  border-color: var(--primary-color);
+  display: flex; position: absolute; top: 0; left: 0;
+  background-color: rgba(0, 123, 255, 0.1); border-color: var(--primary-color);
   z-index: 10;
 }
 .drop-zone-prompt { text-align: center; color: var(--text-color-light); }
 .drop-zone-prompt h2 { color: var(--text-color); margin: 1rem 0; }
-
-.canvas-wrapper {
-  margin: auto;
-}
-
-.canvas-wrapper .canvas-container {
-  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-}
+.canvas-wrapper { margin: auto; }
+.canvas-wrapper .canvas-container { box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
 
 /* 底部工具栏 */
 .main-content-footer {
@@ -164,11 +138,10 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 #page-indicator { font-weight: bold; min-width: 80px; }
 .page-selector {
   padding: 4px 8px; border-radius: 4px;
-  border: 1px solid var(--border-color);
-  background-color: var(--surface-color);
+  border: 1px solid var(--border-color); background-color: var(--surface-color);
 }
 #zoom-slider { flex-grow: 1; max-width: 200px; }
-#zoom-value { font-weight: bold; min-width: 100px; text-align: right; }
+#zoom-value { font-weight: bold; min-width: 120px; text-align: right; }
 
 /* 右侧工具栏 */
 .toolbar { padding: 1.5rem; }
@@ -184,13 +157,32 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
 }
 .file-inputs, .button-group { display: flex; flex-direction: column; gap: 0.75rem; }
 .button-group { margin-bottom: 1rem; }
-.file-name { font-size: 0.875rem; color: var(--text-color-light); margin-top: 0.5rem; }
 .toolbar-footer {
     margin-top: auto; text-align: center; font-size: 0.875rem;
     color: var(--text-color-light); padding-top: 1rem;
     border-top: 1px solid var(--border-color);
 }
 .toolbar-footer a { color: var(--primary-color); text-decoration: none; }
+
+/* **FIX 3: 印章预览样式** */
+.seal-preview {
+  margin-top: 0.75rem;
+  width: 100%;
+  height: 120px;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--border-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-color);
+}
+.seal-preview span { color: var(--text-color-light); }
+.seal-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  padding: 8px; /* 内边距，防止图片贴边 */
+  object-fit: contain;
+}
 
 /* 通用组件 */
 .btn {
