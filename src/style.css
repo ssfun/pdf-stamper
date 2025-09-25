@@ -158,9 +158,9 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   text-transform: uppercase; letter-spacing: 1px;
 }
 .file-inputs, .button-group { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.5rem; }
-.button-group { margin-bottom: 1rem; }
+.button-group { margin-bottom: 0.5rem; }
 .toolbar-footer {
-    margin-top: auto; text-align: center; font-size: 0.875rem;
+    margin-top: 1rem; text-align: center; font-size: 0.875rem;
     color: var(--text-color-light); padding-top: 1rem;
     border-top: 1px solid var(--border-color);
     flex-shrink: 0; /* 防止页脚被压缩 */
