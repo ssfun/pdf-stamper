@@ -12,7 +12,7 @@ function loadScript(src) {
 
 // ---- 全局变量 ----
 let pdfDoc = null;
-let originalPdfBytes = null; // 仍然保留，用于初次渲染
+let originalPdfBytes = null;
 let fabricCanvases = [];
 let sealImage = null;
 let sealImageElement = null;
@@ -46,14 +46,10 @@ const rotationSlider = document.getElementById('rotation-slider');
 const rotationInput = document.getElementById('rotation-input');
 
 // ---- 主程序入口 ----
-async function main() {
-  await Promise.all([
-    loadScript('/lib/pdf.min.js'),
-    loadScript('/lib/fabric.min.js'),
-    loadScript('/lib/pdf-lib.min.js'),
-  ]);
+function main() {
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist/build/pdf.worker.min.js`;
   initializeEventListeners();
+  console.log('应用已初始化');
 }
 
 // ---- 事件监听初始化 ----
@@ -172,7 +168,8 @@ async function handlePdfFile(file) {
     fileReader.onload = async (e) => {
         originalPdfBytes = new Uint8Array(e.target.result);
         try {
-            pdfDoc = await pdfjsLib.getDocument({ data: originalPdfBytes }).promise;
+            // ** 核心修复：传递数据的副本给 pdf.js **
+            pdfDoc = await pdfjsLib.getDocument({ data: originalPdfBytes.slice() }).promise;
             totalPages = pdfDoc.numPages;
             fabricCanvases = new Array(totalPages).fill(null);
             pageFitScales = new Array(totalPages).fill(null);
@@ -269,7 +266,7 @@ function handleSealFile(file) {
             alert('印章已准备好。');
         }
     };
-    reader.readAsDataURL(file);
+    reader.readAsArrayBuffer(file);
 }
 
 function addNormalSeal() {
@@ -361,23 +358,14 @@ function deleteSelectedObject() {
     }
 }
 
-// ** 核心修复：重写导出函数，确保数据源可靠 **
 async function exportPDF() {
-    const originalFile = pdfInputElement.files[0];
-    if (!originalFile) {
-        return alert('无法找到原始PDF文件，请尝试重新上传。');
-    }
-
+    if (!originalPdfBytes) return alert('请先上传PDF文件！');
     const exportButton = document.getElementById('exportPDF');
     exportButton.textContent = '导出中...'; exportButton.disabled = true;
-
     try {
-        // 重新读取文件以获取最新、最干净的数据
-        const fileAsArrayBuffer = await originalFile.arrayBuffer();
         const { PDFDocument, degrees } = window.PDFLib;
-        const pdfDoc = await PDFDocument.load(fileAsArrayBuffer);
+        const pdfDoc = await PDFDocument.load(originalPdfBytes);
         const pages = pdfDoc.getPages();
-        
         for (let i = 0; i < pages.length; i++) {
             const canvas = fabricCanvases[i];
             if (!canvas) continue;
@@ -409,7 +397,7 @@ async function exportPDF() {
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        const fileName = originalFile.name.replace('.pdf', '') || 'document';
+        const fileName = pdfInputElement.files[0]?.name.replace('.pdf', '') || 'document';
         link.download = `${fileName}_盖章版.pdf`;
         link.click();
         URL.revokeObjectURL(link.href);
@@ -422,4 +410,5 @@ async function exportPDF() {
     }
 }
 
+// **恢复 main() 的调用**
 main();
