@@ -1,5 +1,10 @@
+/* ==================== CSS变量定义 ==================== */
+
 :root {
+  /* 字体设置 */
   --font-family-sans: "Inter", "Helvetica Neue", "Helvetica", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+
+  /* 颜色系统 */
   --primary-color: #007bff;
   --primary-hover-color: #0056b3;
   --secondary-color: #6c757d;
@@ -11,15 +16,19 @@
   --border-color: #dee2e6;
   --text-color: #212529;
   --text-color-light: #6c757d;
+
+  /* 设计系统 */
   --border-radius: 8px;
   --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   --sidebar-width: 220px;
   --sidebar-collapsed-width: 60px;
 }
+/* 重置和基础样式 */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: var(--font-family-sans); background-color: var(--bg-color); color: var(--text-color); overflow: hidden; }
 
-/* 主应用布局 */
+/* ==================== 主应用布局 ==================== */
+
 #app {
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr 320px;
@@ -28,10 +37,13 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   padding: 1rem;
   transition: grid-template-columns 0.3s ease-in-out;
 }
+
+/* 侧边栏收起状态 */
 #app.sidebar-collapsed {
   grid-template-columns: var(--sidebar-collapsed-width) 1fr 320px;
 }
 
+/* 通用面板样式 */
 .sidebar, .main-content-wrapper, .toolbar {
   background-color: var(--surface-color);
   border-radius: var(--border-radius);
@@ -41,11 +53,14 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   flex-direction: column;
 }
 
-/* 左侧边栏 */
+/* ==================== 左侧边栏样式 ==================== */
+
 .sidebar {
   padding: 1rem;
   transition: padding 0.3s ease-in-out;
 }
+
+/* 侧边栏头部 */
 .sidebar-header {
   display: flex;
   justify-content: space-between;
@@ -54,144 +69,200 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   flex-shrink: 0;
   transition: justify-content 0.3s ease-in-out;
 }
+
+/* 侧边栏收起时的头部样式 */
 #app.sidebar-collapsed .sidebar-header {
     justify-content: center;
 }
-.sidebar-header h2 { 
-  font-size: 1.25rem; 
-  white-space: nowrap; 
+
+.sidebar-header h2 {
+  font-size: 1.25rem;
+  white-space: nowrap;
   transition: opacity 0.2s, width 0.2s;
   width: auto;
   opacity: 1;
 }
+
+/* 侧边栏收起时的标题隐藏 */
 #app.sidebar-collapsed .sidebar-header h2 {
   opacity: 0;
   width: 0;
   pointer-events: none;
 }
-.thumbnail-container { 
-  overflow-y: auto; 
+
+/* 缩略图容器 */
+.thumbnail-container {
+  overflow-y: auto;
   flex-grow: 1;
   transition: opacity 0.2s ease-in-out;
 }
+
+/* 侧边栏收起时的缩略图隐藏 */
 #app.sidebar-collapsed .thumbnail-container {
   opacity: 0;
   pointer-events: none;
 }
+
+/* 空状态样式 */
 .thumbnail-container .empty-state {
   height: 100%; display: flex; align-items: center;
   justify-content: center; color: var(--text-color-light);
 }
+
+/* 缩略图项 */
 .thumbnail-item {
   margin-bottom: 1rem; cursor: pointer; border: 2px solid transparent;
   border-radius: 4px; transition: border-color 0.2s ease;
   padding: 4px; max-width: 150px; margin-left: auto; margin-right: auto;
 }
+
 .thumbnail-item canvas { width: 100%; display: block; border-radius: 2px; }
+
+/* 激活状态的缩略图 */
 .thumbnail-item.active { border-color: var(--primary-color); }
+
 .thumbnail-item p { text-align: center; margin-top: 0.5rem; font-size: 0.875rem; }
 
+/* 侧边栏切换按钮 */
 .sidebar-toggle-btn {
   background: none; border: none; padding: 4px; cursor: pointer;
   color: var(--text-color-light); border-radius: var(--border-radius);
   transition: color 0.2s, background-color 0.2s, transform 0.3s ease-in-out;
 }
+
 .sidebar-toggle-btn:hover { background-color: var(--bg-color); color: var(--text-color); }
+
+/* 侧边栏收起时的按钮旋转 */
 #app.sidebar-collapsed .sidebar-toggle-btn {
   transform: rotate(180deg);
 }
 
-/* 中间主工作区 */
+/* ==================== 中间主工作区样式 ==================== */
+
 .main-content-wrapper { padding: 0; position: relative; overflow: hidden; }
+
 .main-content {
   overflow: auto; flex-grow: 1; display: flex; padding: 2rem;
   background-color: var(--bg-color); position: relative; height: 100%;
 }
 
-/* 拖拽区域 */
+/* ==================== 拖拽区域样式 ==================== */
+
 .drop-zone {
   display: none; flex-direction: column; align-items: center; justify-content: center;
   width: 100%; height: 100%; border: 3px dashed var(--border-color);
   border-radius: var(--border-radius); transition: all 0.2s;
 }
+
+/* 无PDF文件时的样式 */
 #app.no-pdf-loaded .main-content { padding: 0; }
 #app.no-pdf-loaded .drop-zone { display: flex; }
+
+/* 拖拽悬停状态 */
 .main-content.dragover .drop-zone {
   display: flex; position: absolute; top: 0; left: 0;
   background-color: rgba(0, 123, 255, 0.1); border-color: var(--primary-color); z-index: 10;
 }
+
 .drop-zone-prompt { text-align: center; color: var(--text-color-light); }
 .drop-zone-prompt h2 { color: var(--text-color); margin: 1rem 0; }
+
+/* 画布包装器 */
 .canvas-wrapper { margin: auto; }
 .canvas-wrapper .canvas-container { box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
 
-/* 底部工具栏 */
+/* ==================== 底部工具栏样式 ==================== */
+
 .main-content-footer {
   flex-shrink: 0; padding: 0.75rem 1.5rem;
   border-top: 1px solid var(--border-color);
   display: flex; align-items: center; justify-content: space-between;
   gap: 1.5rem; font-size: 0.875rem;
 }
+
 .zoom-controls, .page-navigator { display: flex; align-items: center; gap: 0.75rem; }
+
 #page-indicator { font-weight: bold; min-width: 80px; }
+
 .page-selector {
   padding: 4px 8px; border-radius: 4px;
   border: 1px solid var(--border-color); background-color: var(--surface-color);
 }
+
 #zoom-slider { flex-grow: 1; max-width: 200px; }
 #zoom-value { font-weight: bold; min-width: 120px; text-align: right; }
 
-/* 右侧工具栏 */
-.toolbar { 
+/* ==================== 右侧工具栏样式 ==================== */
+
+.toolbar {
   padding: 1.5rem;
-  /* ** 核心修复：添加垂直滚动 ** */
   overflow-y: auto;
 }
+
+/* 工具栏头部 */
 .toolbar-header {
   text-align: center; margin-bottom: 1rem;
   border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;
 }
+
 .toolbar-header h1 { font-size: 2rem; }
+
+/* 工具区块 */
 .tool-section { margin-bottom: 0.5rem; }
+
 .tool-section h3 {
   font-size: 1rem; margin-bottom: 1rem; color: var(--text-color-light);
   text-transform: uppercase; letter-spacing: 1px;
 }
+
+/* 文件输入和按钮组 */
 .file-inputs, .button-group { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.5rem; }
 .button-group { margin-bottom: 0.5rem; }
+
+/* 工具栏底部 */
 .toolbar-footer {
     margin-top: 1rem; text-align: center; font-size: 0.875rem;
     color: var(--text-color-light); padding-top: 1rem;
     border-top: 1px solid var(--border-color);
-    flex-shrink: 0; /* 防止页脚被压缩 */
+    flex-shrink: 0;
 }
+
 .toolbar-footer a { color: var(--primary-color); text-decoration: none; }
 
-/* 印章预览与控制 */
+/* ==================== 印章预览与控制样式 ==================== */
+
 .seal-preview-container {
   width: 100%; height: 150px; border: 1px dashed var(--border-color);
   border-radius: var(--border-radius);
   display: flex; align-items: center; justify-content: center;
   background-color: #f8f9fa; position: relative; overflow: hidden;
 }
+
 .seal-preview-image {
   max-width: 100%; max-height: 100%; object-fit: contain;
   transition: transform 0.2s ease-in-out;
 }
+
 .seal-preview-placeholder { color: var(--text-color-light); }
+
 .hidden { display: none; }
+
+/* 旋转控制 */
 .rotation-controls {
     display: flex;
     align-items: center;
     gap: 0.5rem;
 }
+
 .rotation-controls label {
     font-size: 0.875rem;
     color: var(--text-color-light);
 }
+
 .rotation-controls input[type="range"] {
     flex-grow: 1;
 }
+
 .rotation-input-box {
     width: 60px;
     padding: 4px 8px;
@@ -200,7 +271,8 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
     text-align: center;
 }
 
-/* 通用组件 */
+/* ==================== 按钮组件样式 ==================== */
+
 .btn {
   display: inline-block; font-weight: 600; color: var(--surface-color);
   text-align: center; cursor: pointer; background-color: transparent;
@@ -208,12 +280,22 @@ body { font-family: var(--font-family-sans); background-color: var(--bg-color); 
   font-size: 1rem; border-radius: var(--border-radius);
   transition: all 0.15s ease-in-out; width: 100%;
 }
+
+/* 主要按钮 */
 .btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); }
 .btn-primary:hover { background-color: var(--primary-hover-color); border-color: var(--primary-hover-color); }
+
+/* 次要按钮 */
 .btn-secondary { background-color: var(--secondary-color); border-color: var(--secondary-color); }
 .btn-secondary:hover { background-color: var(--secondary-hover-color); border-color: var(--secondary-hover-color); }
+
+/* 危险按钮 */
 .btn-danger { background-color: var(--danger-color); border-color: var(--danger-color); }
 .btn-danger:hover { background-color: var(--danger-hover-color); border-color: var(--danger-hover-color); }
+
+/* 操作按钮 */
 .btn-action { background-color: var(--surface-color); color: var(--primary-color); border: 1px solid var(--primary-color); }
 .btn-action:hover { background-color: var(--primary-color); color: var(--surface-color); }
+
+/* 导出按钮 */
 .btn-export { font-size: 1.125rem; padding: 1rem; }
