@@ -56,7 +56,15 @@ async function main() {
 function initializeEventListeners() {
     sidebarToggleBtn.addEventListener('click', () => {
         appContainer.classList.toggle('sidebar-collapsed');
-        setTimeout(() => { if(pdfDoc) showPage(currentActivePage, true); }, 300);
+        
+        // ** 核心修复：重置所有页面的尺寸缓存，并强制重绘当前页 **
+        pageFitScales = new Array(totalPages).fill(null); 
+        
+        setTimeout(() => { 
+            if(pdfDoc) {
+                showPage(currentActivePage, true); 
+            }
+        }, 300); // 等待CSS动画完成
     });
     
     mainContent.addEventListener('dragover', (e) => { e.preventDefault(); mainContent.classList.add('dragover'); });
@@ -215,14 +223,21 @@ async function renderAllPages() {
 }
 
 async function initializeFabricCanvasForPage(pageNum, forceRecalculate = false) {
+    // ** 核心修复：当强制重算或缓存不存在时，重新计算fitScale **
+    if (forceRecalculate || !pageFitScales[pageNum - 1]) {
+        const page = await pdfDoc.getPage(pageNum);
+        const highResViewport = page.getViewport({ scale: 2.0 });
+        const containerWidth = mainContent.clientWidth - 40;
+        pageFitScales[pageNum - 1] = (containerWidth * 0.9) / highResViewport.width;
+    }
+    
     if (fabricCanvases[pageNum - 1] && !forceRecalculate) return fabricCanvases[pageNum - 1];
+
     const page = await pdfDoc.getPage(pageNum);
     const highResViewport = page.getViewport({ scale: 2.0 });
     const originalWidth = highResViewport.width;
     const originalHeight = highResViewport.height;
-    const containerWidth = mainContent.clientWidth - 40;
-    const fitScale = (containerWidth * 0.9) / originalWidth;
-    pageFitScales[pageNum - 1] = fitScale;
+
     const canvasEl = document.getElementById(`canvas-${pageNum}`);
     const fabricCanvas = fabricCanvases[pageNum - 1] || new fabric.Canvas(canvasEl);
     if (!fabricCanvases[pageNum - 1]) {
@@ -268,7 +283,6 @@ function handleSealFile(file) {
     reader.readAsDataURL(file);
 }
 
-// ** 核心修复：添加普通章 **
 function addNormalSeal() {
     if (!sealImageElement || !sealImageElement.src || sealImageElement.naturalWidth === 0 || !pdfDoc) {
         alert('请先选择一个有效的印章图片！');
@@ -276,8 +290,6 @@ function addNormalSeal() {
     }
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
-
-    // 创建一个新的Image对象来确保它已加载
     const imageToProcess = new Image();
     imageToProcess.onload = () => {
         const rotatedSealUrl = getRotatedCroppedImage(imageToProcess, sealRotation);
@@ -302,19 +314,16 @@ function addNormalSeal() {
     imageToProcess.src = sealImageElement.src;
 }
 
-// ** 核心修复：添加骑缝章 **
 async function addStraddleSeal() {
     if (!sealImageElement || !sealImageElement.src || sealImageElement.naturalWidth === 0 || !pdfDoc) {
         alert('请先选择一个有效的印章图片！');
         return;
     }
-
     const imageToProcess = new Image();
     imageToProcess.onload = async () => {
         const rotatedSealUrl = getRotatedCroppedImage(imageToProcess, sealRotation);
         const rotatedSealImage = new Image();
         rotatedSealImage.src = rotatedSealUrl;
-        
         rotatedSealImage.onload = async () => {
             const totalPages = pdfDoc.numPages;
             const pieceWidth = sealImageElement.width / totalPages;
@@ -363,7 +372,6 @@ async function addStraddleSeal() {
     };
     imageToProcess.src = sealImageElement.src;
 }
-
 
 function deleteSelectedObject() {
     const canvas = fabricCanvases[currentActivePage - 1];
@@ -436,5 +444,5 @@ async function exportPDF() {
     }
 }
 
-// 恢复 main() 的调用
+// **恢复 main() 的调用**
 main();
