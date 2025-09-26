@@ -37,10 +37,10 @@ const rotationInput = document.getElementById('rotation-input');
 
 // ---- 主程序入口 ----
 function main() {
-  // ** 核心改动 1: 设置 pdf.worker.js 的 CDN 路径 **
-  // 注意这里的版本号需要和你 index.html 中引用的 pdf.js 版本号保持一致
+  // ** 核心改动：设置 pdf.worker.js 的 CDN 路径 **
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist/build/pdf.worker.min.js`;
   initializeEventListeners();
+  console.log('应用已初始化');
 }
 
 // ---- 事件监听初始化 ----
@@ -400,5 +400,5 @@ async function exportPDF() {
     }
 }
 
-
-// **在 main.js 的最后，我们不再需要调用 main()，因为它会在所有CDN脚本加载后被调用**
+// ** 核心改动：在脚本末尾调用 main() **
+main();
