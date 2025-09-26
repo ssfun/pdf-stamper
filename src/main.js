@@ -36,7 +36,7 @@ const rotationInput = document.getElementById('rotation-input');
 
 // ---- 主程序入口 ----
 function main() {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist/build/pdf.worker.min.js`;
   initializeEventListeners();
   console.log('应用已初始化');
 }
