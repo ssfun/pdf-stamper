@@ -1,10 +1,21 @@
 import './style.css';
 
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
 // ---- 全局变量 ----
 let pdfDoc = null;
 let originalPdfBytes = null;
 let fabricCanvases = [];
-let sealImageElement = null; // The original uploaded image element
+let sealImage = null;
+let sealImageElement = null;
 let currentActivePage = 1;
 let totalPages = 0;
 let pageFitScales = [];
@@ -35,7 +46,7 @@ const rotationSlider = document.getElementById('rotation-slider');
 const rotationInput = document.getElementById('rotation-input');
 
 // ---- 主程序入口 ----
-function main() {
+async function main() {
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist/build/pdf.worker.min.js`;
   initializeEventListeners();
   console.log('应用已初始化');
@@ -241,121 +252,118 @@ async function showPage(pageNum, forceRecalculate = false) {
     updatePageNavigator();
 }
 
-// ** 核心修复：重写图片加载函数 **
 function handleSealFile(file) {
     const reader = new FileReader();
     reader.onload = function(event) {
         const imageUrl = event.target.result;
-        
-        // 先禁用添加按钮
-        addSealBtn.disabled = true;
-        addStraddleBtn.disabled = true;
-
         sealImageElement = new Image();
-        
-        // 设置 onload 事件，成功加载后才启用按钮
-        sealImageElement.onload = () => {
-            console.log('印章图片加载成功');
-            alert('印章已准备好。');
-            addSealBtn.disabled = false;
-            addStraddleBtn.disabled = false;
-        };
-        
-        // 设置 onerror 事件，处理加载失败的情况
-        sealImageElement.onerror = () => {
-            console.error('印章图片加载失败');
-            alert('无法加载印章图片，请检查文件是否为有效的图片格式。');
-            sealPreviewImg.classList.add('hidden');
-            sealPlaceholder.classList.remove('hidden');
-        };
-
-        // 最后才设置 src，以确保事件监听器已准备就绪
         sealImageElement.src = imageUrl;
-
-        // 更新预览图
         sealPreviewImg.src = imageUrl;
         sealPreviewImg.classList.remove('hidden');
         sealPlaceholder.classList.add('hidden');
+        sealImageElement.onload = () => {
+            alert('印章已准备好。');
+        }
     };
     reader.readAsDataURL(file);
 }
 
-
+// ** 核心修复：添加普通章 **
 function addNormalSeal() {
-    if (!sealImageElement || !sealImageElement.complete || !pdfDoc) {
-        alert('印章尚未准备好或图片已损坏，请稍候或重新上传。');
+    if (!sealImageElement || !sealImageElement.src || sealImageElement.naturalWidth === 0 || !pdfDoc) {
+        alert('请先选择一个有效的印章图片！');
         return;
     }
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
-    const rotatedSealUrl = getRotatedCroppedImage(sealImageElement, sealRotation);
-    fabric.Image.fromURL(rotatedSealUrl, (img) => {
-        img.scaleToWidth(canvas.originalWidth / 5);
-        img.set({
-            left: canvas.originalWidth / 2, top: canvas.originalHeight / 2,
-            originX: 'center', originY: 'center',
-            cornerSize: 10, cornerStyle: 'circle', cornerColor: '#007bff',
-            transparentCorners: false, borderColor: '#007bff',
-            lockRotation: true,
-            angle: 0
+
+    // 创建一个新的Image对象来确保它已加载
+    const imageToProcess = new Image();
+    imageToProcess.onload = () => {
+        const rotatedSealUrl = getRotatedCroppedImage(imageToProcess, sealRotation);
+        fabric.Image.fromURL(rotatedSealUrl, (img) => {
+            img.scaleToWidth(canvas.originalWidth / 5);
+            img.set({
+                left: canvas.originalWidth / 2, top: canvas.originalHeight / 2,
+                originX: 'center', originY: 'center',
+                cornerSize: 10, cornerStyle: 'circle', cornerColor: '#007bff',
+                transparentCorners: false, borderColor: '#007bff',
+                lockRotation: true,
+                angle: 0
+            });
+            canvas.add(img);
+            canvas.setActiveObject(img);
+            canvas.renderAll();
         });
-        canvas.add(img);
-        canvas.setActiveObject(img);
-        canvas.renderAll();
-    });
+    };
+    imageToProcess.onerror = () => {
+        alert('无法处理此印章图片。');
+    };
+    imageToProcess.src = sealImageElement.src;
 }
 
+// ** 核心修复：添加骑缝章 **
 async function addStraddleSeal() {
-    if (!sealImageElement || !sealImageElement.complete || !pdfDoc) {
-        alert('印章尚未准备好或图片已损坏，请稍候或重新上传。');
+    if (!sealImageElement || !sealImageElement.src || sealImageElement.naturalWidth === 0 || !pdfDoc) {
+        alert('请先选择一个有效的印章图片！');
         return;
     }
-    const rotatedSealUrl = getRotatedCroppedImage(sealImageElement, sealRotation);
-    const rotatedSealImage = new Image();
-    rotatedSealImage.src = rotatedSealUrl;
-    rotatedSealImage.onload = async () => {
-        const totalPages = pdfDoc.numPages;
-        const pieceWidth = sealImageElement.width / totalPages;
-        const groupId = `straddle-${Date.now()}`;
-        for (let i = 0; i < totalPages; i++) {
-            const pageNum = i + 1;
-            const canvas = await initializeFabricCanvasForPage(pageNum);
-            if (!canvas) continue;
-            const initialScale = (canvas.originalWidth / 5) / sealImageElement.width;
-            const tempPieceCanvas = document.createElement('canvas');
-            tempPieceCanvas.width = pieceWidth;
-            tempPieceCanvas.height = sealImageElement.height;
-            tempPieceCanvas.getContext('2d').drawImage(rotatedSealImage, i * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
-            fabric.Image.fromURL(tempPieceCanvas.toDataURL(), (imgPiece) => {
-                imgPiece.scale(initialScale);
-                const scaledPieceWidth = pieceWidth * initialScale;
-                imgPiece.set({
-                    left: canvas.originalWidth - scaledPieceWidth,
-                    top: 400, hasControls: true, borderColor: '#007bff',
-                    lockMovementX: true, 
-                    lockRotation: true,
-                    straddleGroup: groupId, pageIndex: i,
-                    originX: 'left', originY: 'top', 
-                    angle: 0
-                });
-                canvas.add(imgPiece);
-                canvas.renderAll();
-                const syncObjects = (target) => {
-                    fabricCanvases.forEach((c) => {
-                        if (!c) return;
-                        c.getObjects().filter(obj => obj.straddleGroup === groupId && obj !== target)
-                         .forEach(obj => {
-                             obj.set({ top: target.top, scaleX: target.scaleX, scaleY: target.scaleY }).setCoords();
-                             c.renderAll();
-                        });
+
+    const imageToProcess = new Image();
+    imageToProcess.onload = async () => {
+        const rotatedSealUrl = getRotatedCroppedImage(imageToProcess, sealRotation);
+        const rotatedSealImage = new Image();
+        rotatedSealImage.src = rotatedSealUrl;
+        
+        rotatedSealImage.onload = async () => {
+            const totalPages = pdfDoc.numPages;
+            const pieceWidth = sealImageElement.width / totalPages;
+            const groupId = `straddle-${Date.now()}`;
+            for (let i = 0; i < totalPages; i++) {
+                const pageNum = i + 1;
+                const canvas = await initializeFabricCanvasForPage(pageNum);
+                if (!canvas) continue;
+                const initialScale = (canvas.originalWidth / 5) / sealImageElement.width;
+                const tempPieceCanvas = document.createElement('canvas');
+                tempPieceCanvas.width = pieceWidth;
+                tempPieceCanvas.height = sealImageElement.height;
+                tempPieceCanvas.getContext('2d').drawImage(rotatedSealImage, i * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
+                fabric.Image.fromURL(tempPieceCanvas.toDataURL(), (imgPiece) => {
+                    imgPiece.scale(initialScale);
+                    const scaledPieceWidth = pieceWidth * initialScale;
+                    imgPiece.set({
+                        left: canvas.originalWidth - scaledPieceWidth,
+                        top: 400, hasControls: true, borderColor: '#007bff',
+                        lockMovementX: true, 
+                        lockRotation: true,
+                        straddleGroup: groupId, pageIndex: i,
+                        originX: 'left', originY: 'top', 
+                        angle: 0
                     });
-                };
-                imgPiece.on('moving', () => syncObjects(imgPiece));
-                imgPiece.on('scaling', () => syncObjects(imgPiece));
-            });
+                    canvas.add(imgPiece);
+                    canvas.renderAll();
+                    const syncObjects = (target) => {
+                        fabricCanvases.forEach((c) => {
+                            if (!c) return;
+                            c.getObjects().filter(obj => obj.straddleGroup === groupId && obj !== target)
+                             .forEach(obj => {
+                                 obj.set({ top: target.top, scaleX: target.scaleX, scaleY: target.scaleY }).setCoords();
+                                 c.renderAll();
+                            });
+                        });
+                    };
+                    imgPiece.on('moving', () => syncObjects(imgPiece));
+                    imgPiece.on('scaling', () => syncObjects(imgPiece));
+                });
+            }
         }
-    }
+    };
+    imageToProcess.onerror = () => {
+        alert('无法处理此印章图片。');
+    };
+    imageToProcess.src = sealImageElement.src;
 }
+
 
 function deleteSelectedObject() {
     const canvas = fabricCanvases[currentActivePage - 1];
@@ -428,5 +436,5 @@ async function exportPDF() {
     }
 }
 
-// **恢复 main() 的调用**
+// 恢复 main() 的调用
 main();
