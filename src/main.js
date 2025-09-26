@@ -1,21 +1,10 @@
 import './style.css';
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.onload = resolve;
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-}
-
 // ---- 全局变量 ----
 let pdfDoc = null;
 let originalPdfBytes = null;
 let fabricCanvases = [];
-let sealImage = null;
-let sealImageElement = null;
+let sealImageElement = null; // The original uploaded image element
 let currentActivePage = 1;
 let totalPages = 0;
 let pageFitScales = [];
@@ -47,7 +36,7 @@ const rotationInput = document.getElementById('rotation-input');
 
 // ---- 主程序入口 ----
 function main() {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist/build/pdf.worker.min.js`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js`;
   initializeEventListeners();
   console.log('应用已初始化');
 }
@@ -168,7 +157,6 @@ async function handlePdfFile(file) {
     fileReader.onload = async (e) => {
         originalPdfBytes = new Uint8Array(e.target.result);
         try {
-            // ** 核心修复：传递数据的副本给 pdf.js **
             pdfDoc = await pdfjsLib.getDocument({ data: originalPdfBytes.slice() }).promise;
             totalPages = pdfDoc.numPages;
             fabricCanvases = new Array(totalPages).fill(null);
@@ -253,24 +241,51 @@ async function showPage(pageNum, forceRecalculate = false) {
     updatePageNavigator();
 }
 
+// ** 核心修复：重写图片加载函数 **
 function handleSealFile(file) {
     const reader = new FileReader();
     reader.onload = function(event) {
         const imageUrl = event.target.result;
+        
+        // 先禁用添加按钮
+        addSealBtn.disabled = true;
+        addStraddleBtn.disabled = true;
+
         sealImageElement = new Image();
+        
+        // 设置 onload 事件，成功加载后才启用按钮
+        sealImageElement.onload = () => {
+            console.log('印章图片加载成功');
+            alert('印章已准备好。');
+            addSealBtn.disabled = false;
+            addStraddleBtn.disabled = false;
+        };
+        
+        // 设置 onerror 事件，处理加载失败的情况
+        sealImageElement.onerror = () => {
+            console.error('印章图片加载失败');
+            alert('无法加载印章图片，请检查文件是否为有效的图片格式。');
+            sealPreviewImg.classList.add('hidden');
+            sealPlaceholder.classList.remove('hidden');
+        };
+
+        // 最后才设置 src，以确保事件监听器已准备就绪
         sealImageElement.src = imageUrl;
+
+        // 更新预览图
         sealPreviewImg.src = imageUrl;
         sealPreviewImg.classList.remove('hidden');
         sealPlaceholder.classList.add('hidden');
-        sealImageElement.onload = () => {
-            alert('印章已准备好。');
-        }
     };
-    reader.readAsArrayBuffer(file);
+    reader.readAsDataURL(file);
 }
 
+
 function addNormalSeal() {
-    if (!sealImageElement || !pdfDoc) return;
+    if (!sealImageElement || !sealImageElement.complete || !pdfDoc) {
+        alert('印章尚未准备好或图片已损坏，请稍候或重新上传。');
+        return;
+    }
     const canvas = fabricCanvases[currentActivePage - 1];
     if (!canvas) return;
     const rotatedSealUrl = getRotatedCroppedImage(sealImageElement, sealRotation);
@@ -291,7 +306,10 @@ function addNormalSeal() {
 }
 
 async function addStraddleSeal() {
-    if (!sealImageElement || !pdfDoc) return;
+    if (!sealImageElement || !sealImageElement.complete || !pdfDoc) {
+        alert('印章尚未准备好或图片已损坏，请稍候或重新上传。');
+        return;
+    }
     const rotatedSealUrl = getRotatedCroppedImage(sealImageElement, sealRotation);
     const rotatedSealImage = new Image();
     rotatedSealImage.src = rotatedSealUrl;
