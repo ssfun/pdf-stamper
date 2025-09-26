@@ -1,8 +1,18 @@
 import './style.css';
 
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
 // ---- 全局变量 ----
 let pdfDoc = null;
-let originalPdfBytes = null;
+let originalPdfBytes = null; // 仍然保留，用于初次渲染
 let fabricCanvases = [];
 let sealImage = null;
 let sealImageElement = null;
@@ -36,11 +46,14 @@ const rotationSlider = document.getElementById('rotation-slider');
 const rotationInput = document.getElementById('rotation-input');
 
 // ---- 主程序入口 ----
-function main() {
-  // ** 核心改动：设置 pdf.worker.js 的 CDN 路径 **
+async function main() {
+  await Promise.all([
+    loadScript('/lib/pdf.min.js'),
+    loadScript('/lib/fabric.min.js'),
+    loadScript('/lib/pdf-lib.min.js'),
+  ]);
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist/build/pdf.worker.min.js`;
   initializeEventListeners();
-  console.log('应用已初始化');
 }
 
 // ---- 事件监听初始化 ----
@@ -348,14 +361,23 @@ function deleteSelectedObject() {
     }
 }
 
+// ** 核心修复：重写导出函数，确保数据源可靠 **
 async function exportPDF() {
-    if (!originalPdfBytes) return alert('请先上传PDF文件！');
+    const originalFile = pdfInputElement.files[0];
+    if (!originalFile) {
+        return alert('无法找到原始PDF文件，请尝试重新上传。');
+    }
+
     const exportButton = document.getElementById('exportPDF');
     exportButton.textContent = '导出中...'; exportButton.disabled = true;
+
     try {
+        // 重新读取文件以获取最新、最干净的数据
+        const fileAsArrayBuffer = await originalFile.arrayBuffer();
         const { PDFDocument, degrees } = window.PDFLib;
-        const pdfDoc = await PDFDocument.load(originalPdfBytes);
+        const pdfDoc = await PDFDocument.load(fileAsArrayBuffer);
         const pages = pdfDoc.getPages();
+        
         for (let i = 0; i < pages.length; i++) {
             const canvas = fabricCanvases[i];
             if (!canvas) continue;
@@ -387,7 +409,7 @@ async function exportPDF() {
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        const fileName = pdfInputElement.files[0]?.name.replace('.pdf', '') || 'document';
+        const fileName = originalFile.name.replace('.pdf', '') || 'document';
         link.download = `${fileName}_盖章版.pdf`;
         link.click();
         URL.revokeObjectURL(link.href);
@@ -400,5 +422,4 @@ async function exportPDF() {
     }
 }
 
-// ** 核心改动：在脚本末尾调用 main() **
 main();
