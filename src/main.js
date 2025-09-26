@@ -1,15 +1,5 @@
 import './style.css';
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.onload = resolve;
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-}
-
 // ---- 全局变量 ----
 let pdfDoc = null;
 let originalPdfBytes = null;
@@ -46,13 +36,10 @@ const rotationSlider = document.getElementById('rotation-slider');
 const rotationInput = document.getElementById('rotation-input');
 
 // ---- 主程序入口 ----
-async function main() {
-  await Promise.all([
-    loadScript('/lib/pdf.min.js'),
-    loadScript('/lib/fabric.min.js'),
-    loadScript('/lib/pdf-lib.min.js'),
-  ]);
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/lib/pdf.worker.min.js';
+function main() {
+  // ** 核心改动 1: 设置 pdf.worker.js 的 CDN 路径 **
+  // 注意这里的版本号需要和你 index.html 中引用的 pdf.js 版本号保持一致
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist/build/pdf.worker.min.js`;
   initializeEventListeners();
 }
 
@@ -311,10 +298,8 @@ async function addStraddleSeal() {
             tempPieceCanvas.width = pieceWidth;
             tempPieceCanvas.height = sealImageElement.height;
             tempPieceCanvas.getContext('2d').drawImage(rotatedSealImage, i * pieceWidth, 0, pieceWidth, sealImageElement.height, 0, 0, pieceWidth, sealImageElement.height);
-            
             fabric.Image.fromURL(tempPieceCanvas.toDataURL(), (imgPiece) => {
                 imgPiece.scale(initialScale);
-                // ** 核心修复：使用 pieceWidth * initialScale 来计算正确的 left 位置 **
                 const scaledPieceWidth = pieceWidth * initialScale;
                 imgPiece.set({
                     left: canvas.originalWidth - scaledPieceWidth,
@@ -415,4 +400,5 @@ async function exportPDF() {
     }
 }
 
-main();
+
+// **在 main.js 的最后，我们不再需要调用 main()，因为它会在所有CDN脚本加载后被调用**
