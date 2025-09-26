@@ -35,7 +35,7 @@ PDF Stamper 是一个免费、开源的纯前端 PDF 盖章应用。它允许用
 
 1.  **克隆仓库**
     ```bash
-    git clone [https://github.com/ssfun/pdf-stamper.git](https://github.com/ssfun/pdf-stamper.git)
+    git clone https://github.com/ssfun/pdf-stamper.git
     cd pdf-stamper
     ```
 
@@ -79,7 +79,6 @@ Cloudflare将自动完成构建和部署，并为您提供一个 `*.pages.dev` �
 .
 ├── dist/             # 构建后的生产文件
 ├── public/           # 静态资源，会被直接复制到dist根目录
-│   └── lib/          # 第三方JS库
 ├── src/              # 项目源代码
 │   ├── main.js       # 应用主逻辑
 │   └── style.css     # 应用主样式
